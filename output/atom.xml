@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Graduate Descent</title>
+  <link href="https://timvieira.github.io/blog/" rel="alternate"/>
+  <link href="https://timvieira.github.io/blog/atom.xml" rel="self"/>
+  <id>https://timvieira.github.io/blog/</id>
+  <updated>2026-04-02T00:00:00Z</updated>
+  <entry>
+    <title>Testing Randomized Algorithms</title>
+    <link href="https://timvieira.github.io/blog/testing-randomized-algorithms/" rel="alternate"/>
+    <id>https://timvieira.github.io/blog/testing-randomized-algorithms/</id>
+    <updated>2026-04-02T00:00:00Z</updated>
+    <author><name>Tim Vieira</name></author>
+  </entry>
+</feed>
