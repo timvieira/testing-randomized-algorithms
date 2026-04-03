@@ -10,7 +10,7 @@ import build
 build.CONTENT_DIR = Path('content')
 build.OUTPUT_DIR = Path('output')
 build.TEMPLATE_DIR = Path.home() / 'projects/blog/main'
-build.STATIC_DIRS = ["css"]
+build.STATIC_DIRS = ["css", "images"]
 build.build()
 "
 

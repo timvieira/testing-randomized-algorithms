@@ -18,7 +18,7 @@ import build
 build.CONTENT_DIR = CONTENT_DIR
 build.OUTPUT_DIR = OUTPUT_DIR
 build.TEMPLATE_DIR = BLOG_DIR
-build.STATIC_DIRS = ["css"]
+build.STATIC_DIRS = ["css", "images"]
 
 
 def do_build():

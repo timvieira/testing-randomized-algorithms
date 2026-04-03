@@ -1,7 +1,29 @@
-title: Testing Randomized Algorithms
+title: Ideas for Testing Randomized Algorithms
 date: 2026-04-02
 comments: true
 tags: testing, sampling, algorithms, monte-carlo, program-tracing
+
+<style>
+/* Subtle scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+</style>
 
 Randomized algorithms are hard to test. Their outputs are, by design,
 unpredictable&mdash;and that unpredictability is a *feature*, not a bug. It is what
@@ -11,10 +33,9 @@ correct when it gives different answers every time you run it?
 
 This post sketches some ideas for how to think about testing randomized
 algorithms&mdash;especially the kinds of algorithms that we use for probabilistic
-inference. I'll walk through a concrete sampling algorithm, develop three
-progressively more powerful testing strategies, and try to make the case that the
-best tests come from actually understanding the theory behind the algorithm
-you're testing.
+inference. I'll present a concrete sampling algorithm with several plausible
+implementations&mdash;some correct, some subtly broken&mdash;and develop
+progressively more powerful testing strategies to tell them apart.
 
 ## A Tricky Little Sampling Algorithm
 
@@ -24,29 +45,35 @@ elements). We want to sample from the *conditional* distribution $p(\cdot \mid
 C)$. But rather than returning a plain sample, we want a *properly weighted*
 sample $(x, w)$&mdash;a sample-weight pair that can be used for unbiased estimation.
 
-The following algorithm, which we call AWRS (from [Lipkin et al., 2025](https://arxiv.org/abs/2504.05410)), does exactly this:
+The following algorithm, which we call AWRS (from [Lipkin et al., 2025](https://arxiv.org/abs/2504.05410)), does exactly this. Here is the pseudocode from the paper:
+
+![AWRS algorithm pseudocode](../images/awrs-algorithm.png)
+
+The idea: run rejection sampling twice. The first pass finds a conditioned
+sample $x^*$ while tracking the total rejected probability mass $\psi$. The
+second pass generates additional rejections to get a count $n$. The weight
+$(1 - \psi) / (n + 1)$ combines these two signals&mdash;the rejected mass and
+the rejection count&mdash;into an unbiased estimate of the normalizing constant
+$Z$. The number of rejections before finding a valid token contains signal about
+the magnitude of $Z$, and weighting by the actual probability mass removed
+(rather than just counting) reduces variance.
+
+### Four Implementations, at Least One Bug
+
+Did we implement it correctly? That's the question we'd like our tests to
+answer. To make the exercise concrete, here are four Python implementations.
+They all look reasonable, but at least one has a bug. Which ones are correct?
+
+Each variant takes a `draw` parameter that defaults to sampling from a
+categorical distribution. This is a hook we'll exploit later: in production it
+calls the RNG, but in testing we'll swap it for something that lets us
+enumerate every possible execution.
 
 <details class="derivation" markdown="1">
-<summary>AWRS pseudocode</summary>
-
-**Input:** distribution $p$, condition $C$
-
-1. Set $\psi \leftarrow 0$, $n \leftarrow 0$
-2. **First pass** ($i=0$): Draw $x \sim p_{\text{cond}}$ (normalized). If $x \in C$, set $x_{c_0} \leftarrow x$ and break. Otherwise, set $\psi \leftarrow \psi + p_{\text{cond}}[x]$, zero out $p_{\text{cond}}[x]$, and increment $n$.
-3. **Second pass** ($i=1$): Draw $x \sim p_{\text{cond}}$ (normalized). If $x \in C$, break. Otherwise, zero out $p_{\text{cond}}[x]$ and increment $n$.
-4. **Return** $(x_{c_0},\ (1 - \psi) / (n+1))$
-
-</details>
-
-Here is a translation into Python. I've kept the `draw` parameter as a hook
-we'll exploit later for testing:
+<summary>Variant A</summary>
 
 ```python
-def awrs(p, cond, draw=sample_categorical):
-    """
-    Properly weighted sampling from a conditioned distribution.
-    Returns (item, weight) pair.
-    """
+def awrs_a(p, cond, draw=sample_categorical):
     p_cond = p.copy()
     n, psi = 0, 0
     xc0 = None
@@ -65,24 +92,96 @@ def awrs(p, cond, draw=sample_categorical):
     return xc0, (1 - psi) / (n + 1)
 ```
 
+</details>
+
 <details class="derivation" markdown="1">
-<summary>Utility: <code>sample_categorical</code></summary>
+<summary>Variant B</summary>
 
 ```python
-import numpy as np
-
-def sample_categorical(p, context=''):
-    """Sample from a categorical distribution (normalized internally)."""
-    p = np.asarray(p, dtype=float)
-    p = p / p.sum()
-    return np.random.choice(len(p), p=p)
+def awrs_b(p, cond, draw=sample_categorical):
+    p_cond = p.copy()
+    n, psi = 0, 0
+    xc0 = None
+    for i in range(2):
+        while True:
+            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            if cond(x):
+                if i == 0:
+                    xc0 = x
+                break
+            else:
+                if i == 0:
+                    psi += p_cond[x]
+                p_cond[x] = 0
+            n += 1
+    return xc0, (1 + psi) / (n + 1)
 ```
 
 </details>
 
-Did we implement it correctly?
+<details class="derivation" markdown="1">
+<summary>Variant C</summary>
 
-Well... what is it *supposed to do*?
+```python
+def awrs_c(p, cond, draw=sample_categorical):
+    p_cond = p.copy()
+    n, psi = 0, 0
+    xc0 = None
+    for i in range(2):
+        while True:
+            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            if cond(x):
+                if i == 0:
+                    xc0 = x
+                break
+            else:
+                psi += p_cond[x]
+                p_cond[x] = 0
+            n += 1
+    return xc0, (1 - psi) / (n + 1)
+```
+
+</details>
+
+<details class="derivation" markdown="1">
+<summary>Variant D</summary>
+
+```python
+def awrs_d(p, cond, draw=sample_categorical):
+    p_cond = p.copy()
+    n, psi = 0, 0
+    xc0 = None
+    for i in range(2):
+        while True:
+            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            if cond(x):
+                if i == 0:
+                    xc0 = x
+                break
+            else:
+                if i == 0:
+                    psi += p_cond[x]
+                p_cond[x] = 0
+            n += 1
+    return xc0, (1 - psi) / (n + 2)
+```
+
+</details>
+
+Each variant differs from the others by a single line. I encourage you to read
+them carefully and try to spot the differences before scrolling further.
+
+<details class="derivation" markdown="1">
+<summary>Hint</summary>
+
+Compare the `else` branch and the `return` statement across the four variants.
+
+</details>
+
+Our job is to build testing strategies that catch the buggy ones&mdash;ideally
+without needing to know which line is wrong.
+
+But first: what *should* the algorithm do?
 
 ### Proper Weighting
 
@@ -128,17 +227,7 @@ target = p * cond  # unnormalized target (not a distribution!)
 The obvious first testing strategy: run the code "a lot of times" and compute an
 average.
 
-```python
-np.random.seed(0)
-reps = 1_000
-have = np.zeros(N)
-
-for r in range(1, 1 + reps):
-    (x, w) = awrs(p, lambda x: cond[x])
-    have[x] += w
-
-print(f'error = {abs(have / reps - target).sum():.6f}')
-```
+{% notebook testing-randomized-algorithms.ipynb cells[1:2] %}
 
 Is this error small enough? How do you know?
 
@@ -149,39 +238,127 @@ as we increase the number of samples.
 ### Convergence Rates
 
 A better approach is to watch the error decrease as a function of the number of
-samples. It should keep going down *forever*, modulo numerical precision. And
-crucially, we know the *rate* at which it should decrease.
+samples $M$. It should keep going down *forever*, modulo numerical precision.
+And crucially, we often know the *rate* at which it should decrease.
 
-For i.i.d. Monte Carlo estimation, the mean squared error is
-$\text{MSE} = \text{Var}(X) / M$ where $M$ is the number of samples. So the root
-mean squared error should decrease as $O(1/\sqrt{M})$. On a log&ndash;log plot, this
-is a line with slope $-1/2$.
+The general picture: suppose we have a sequence of estimators $\widehat{\mu}^{(M)}$
+targeting some quantity $\mu$. The mean squared error decomposes as
 
-{% notebook testing-randomized-algorithms.ipynb cells[1:2] %}
+$$
+\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2
+= \| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2
++ \mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] \|^2
+$$
 
-Why a log&ndash;log scale? Because power laws $y = c \cdot x^{a}$ become lines: $\log
-y = a \log x + \log c$. The fitted slope should be close to $-0.5$, which is
-exactly what we see.
+The first term is the squared bias; the second is the variance (more precisely,
+the trace of the covariance of $\widehat{\mu}^{(M)}$). Different classes of estimators
+make different predictions about how these terms behave:
 
-### Averaging Over Multiple Runs
+- **I.I.D. unbiased** (e.g., our AWRS test). The bias is zero for all $M$.
+  The variance is $V/M$ where $V = \text{tr}(\text{Cov}(X))$&mdash;the sum of
+  the componentwise variances of a single sample. So $\mathop{\mathbb{E}} \|
+  \widehat{\mu}^{(M)} - \mu \|^2 = V/M$.<footnote>If you prefer root mean squared
+  error, the slope is $-1/2$ and the intercept is $\frac{1}{2} \log
+  V$.</footnote>
 
-A single squiggly line on a log&ndash;log plot is suggestive but not rigorous. We can
-do better by averaging over many independent runs and comparing to the
-theoretical MSE curve.
+- **Correlated but unbiased** (e.g., MCMC, Markov reward processes). The bias
+  is still zero, but autocorrelation inflates the variance:
+  $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2 \approx V_{\text{eff}} / M$
+  where $V_{\text{eff}} > V$ depends on the integrated autocorrelation time.
+  The rate is still $O(1/M)$, but the constant is larger.
 
-Because we have a multidimensional target, the relevant quantity is the *trace*
-of the covariance matrix: $V = \text{tr}(\text{Cov}(X))$. The theoretical MSE
-of the $L_2$ error is then $V / M$.
+- **Biased but consistent** (e.g., self-normalized importance sampling). The
+  bias is $O(1/M)$, so $\| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 =
+  O(1/M^2)$. The variance is $O(1/M)$.
+  The MSE is still $O(1/M)$ overall, so on a log&ndash;log plot the slope looks
+  the same&mdash;the bias hides in the noise at large $M$.
+
+In all three cases, $\text{MSE} \sim c / M$ for some constant $c$, which means
+$\log \text{MSE} = -\log M + \log c$: a line with slope $-1$ on a
+log&ndash;log plot. The intercept $\log c$ tells us the constant.
+
+<details class="derivation" markdown="1">
+<summary>Deriving $\,V\,$ for vector-valued estimators</summary>
+
+Our estimator is vector-valued (a distribution over $N$ elements), so we need a
+scalar measure of error. The natural choice is the squared $L_2$ norm
+$\| \widehat{\mu}^{(M)} - \mu \|^2$ where $\widehat{\mu}^{(M)} = \frac{1}{M} \sum_{m=1}^{M} X^{(m)}$
+and $\mu = \mathop{\mathbb{E}}[X^{(m)}]$:
+
+$$
+\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2
+= \mathop{\mathbb{E}} \sum_{j=1}^{N} (\widehat{\mu}^{(M)}_j - \mu_j)^2
+= \sum_{j=1}^{N} \text{Var}(\widehat{\mu}^{(M)}_j)
+= \frac{1}{M} \sum_{j=1}^{N} \text{Var}(X^{(m)}_j)
+= \frac{V}{M}
+$$
+
+where $V = \text{tr}(\text{Cov}(X^{(m)}))$ is the trace of the covariance matrix of a single sample.
+The last step uses independence; for correlated samples, the $1/M$ factor
+becomes $1/M$ times an autocorrelation correction.
+
+</details>
 
 {% notebook testing-randomized-algorithms.ipynb cells[2:3] %}
 
-So what did we actually accomplish? We can now "eyeball" that the mean squared
-error is decreasing at the theoretical rate of $1/M$. The observed curve hugs
-the theoretical one, which is strong evidence that our sampler is properly
-weighted.
+A note on reading this plot: when we say "log&ndash;log scale" we mean the axes are
+log-transformed but the tick labels show the original values (e.g., $10^2$,
+$10^3$). This is what `plt.xscale('log')` does. This is different from
+*literally plotting* $\log y$ vs $\log x$, where the axes are linear but the
+values are logs. The line-fitting code does the latter ($\texttt{np.polyfit}$ on
+$\log x$, $\log y$), but for visual inspection, log-scaled axes are usually
+clearer because you can read off the original quantities directly.
 
-But Monte Carlo testing is a *blunt instrument*. It is hard to beat in the real
-world, but in software, we can almost always do better.
+The fitted slope should be close to $-0.5$ (we're plotting error, not
+squared error), which is exactly what we see.
+
+### What a Single Run Can and Can't Tell Us
+
+Watching a single long run tells us the *rate* of convergence, but it can't
+distinguish the three cases above. An unbiased i.i.d. estimator, a correlated
+MCMC chain, and a self-normalized importance sampler can all produce very similar
+log&ndash;log plots&mdash;the slopes are the same and the constants differ in ways
+that are hard to eyeball.
+
+A pedagogical example: suppose we accidentally computed the average as
+$\frac{1}{M+1} \sum_{m=1}^{M} X^{(m)}$ instead of $\frac{1}{M} \sum_{m=1}^{M}
+X^{(m)}$. This estimator is *biased*&mdash;it systematically underestimates the
+target&mdash;but *consistent*, because the bias factor $M/(M+1) \to 1$. The
+single-run convergence plot would look nearly identical.
+
+### Averaging Over Multiple Runs
+
+To separate bias from variance, we need **multiple independent runs**. The idea:
+run the estimator many times at each sample size $M$, and compare the *average*
+behavior to the theoretical prediction.
+
+Recall the decomposition from earlier: $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} -
+\mu \|^2 = \| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 +
+\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] \|^2$.
+For the i.i.d. unbiased case, the variance term is $V/M$. So:
+
+- If the observed MSE matches $V/M$, the squared bias must be near
+  zero&mdash;evidence of unbiasedness.
+- If the estimator has persistent bias, $\| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] -
+  \mu \|^2$ does not vanish with $M$. At large $M$, the variance $V/M$ shrinks
+  but the bias dominates, causing the observed curve to *flatten out* above the
+  theoretical line.
+- For biased-but-consistent estimators (like self-normalized IS), $\|
+  \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 = O(1/M^2)$&mdash;it vanishes
+  faster than the variance. This means the MSE curve will *eventually* match
+  $V/M$, but may sit slightly above it for small $M$.
+
+{% notebook testing-randomized-algorithms.ipynb cells[3:4] %}
+
+The observed curve hugs the theoretical $V/M$ line, which is strong evidence
+that our sampler is properly weighted&mdash;not just consistent, but unbiased,
+with the right variance.
+
+But Monte Carlo testing is still a *blunt instrument*. Small biases hide
+easily in the noise, and you need many runs to have any statistical power. For
+correlated estimators, the effective variance $V_{\text{eff}}$ may be hard to
+compute, making the theoretical line itself uncertain. In software&mdash;unlike
+the real world&mdash;we can almost always do better.
 
 ## Strategy 2: Program Tracing
 
@@ -236,28 +413,37 @@ class Node:
 class Tracer:
     """
     Lazily materializes the probability tree of a generative process
-    by program tracing.
+    by program tracing. Works with both array-valued and dict-valued
+    distributions.
     """
     def __init__(self):
         self.root = Node(idx=-1, mass=1.0, parent=None)
         self.cur = None
 
     def __call__(self, p, context=None):
-        """Drop-in replacement for sample_categorical."""
-        p = np.asarray(p, dtype=float)
+        """Drop-in replacement for any sampling function."""
+        if isinstance(p, dict):
+            keys = list(p.keys())
+            vals = np.array([p[k] for k in keys])
+        else:
+            p = np.asarray(p, dtype=float)
+            keys = list(range(len(p)))
+            vals = p
+        vals = vals / vals.sum()
         cur = self.cur
 
         if cur.child_masses is None:
-            cur.child_masses = cur.mass * p
+            cur.child_masses = cur.mass * vals
             cur.context = context
 
         a = cur.sample()
         if a not in cur.active_children:
             cur.active_children[a] = Node(
-                idx=a, mass=cur.child_masses[a], parent=cur, token=a,
+                idx=a, mass=cur.child_masses[a], parent=cur,
+                token=keys[a],
             )
         self.cur = cur.active_children[a]
-        return a
+        return keys[a]
 
 
 class TraceSWOR(Tracer):
@@ -280,32 +466,14 @@ class TraceSWOR(Tracer):
 
 ### Exact Verification
 
-Now we can verify AWRS *exactly*:
+Now we can verify all four AWRS variants *exactly*:
 
-```python
-tracer = TraceSWOR()
-prob = np.zeros(N)
-while tracer.root.mass > 0:
-    with tracer:
-        (item, w) = awrs(p, lambda x: cond[x], draw=tracer)
-        prob[item] += w * tracer.cur.mass
-
-assert np.allclose(target, prob), f'mismatch: {target} vs {prob}'
-print('✓ AWRS is properly weighted (exact verification)')
-```
+{% notebook testing-randomized-algorithms.ipynb cells[4:5] %}
 
 This is not a statistical test. It is an *exact* check (modulo floating point)
 that the proper weighting condition holds. No confidence intervals, no
-squinting at log&ndash;log plots. If this assertion passes, the algorithm is correct
-for this test case.
-
-I encourage you to try injecting errors into the AWRS code to see how quickly
-this test catches them. For example, try changing `(1 - psi)` to `(1 + psi)`,
-or removing the `if i == 0` guard. The tracer catches these immediately.
-
-We can visualize the traces that were explored along with their context metadata:
-
-{% notebook testing-randomized-algorithms.ipynb cells[3:4] %}
+squinting at log&ndash;log plots. The tracer gives a definitive yes or no for each
+variant.
 
 <footnote>The difference between `target` and `prob` is not zero&mdash;it rarely will be with floating point numbers. But `np.allclose` checks that they agree to within a reasonable tolerance ($\approx 10^{-8}$).</footnote>
 
@@ -406,65 +574,10 @@ is an unbiased estimate of the partition function $Z =
 \sum_{\mathbf{x}} p(\mathbf{x})$&mdash;in this case, $Z = 1$ since our target
 is already normalized.
 
-We need a slightly different tracer that handles dict-valued distributions.
+Since our `Tracer` handles both arrays and dicts, the same `TraceSWOR` works
+here without modification. Here is the trace tree for SIS:
 
-<details class="derivation" markdown="1">
-<summary><code>DictTraceSWOR</code> implementation</summary>
-
-```python
-class DictTracer(Tracer):
-    """Tracer variant that works with dict-valued distributions."""
-
-    def __call__(self, d, context=None):
-        keys = list(d.keys())
-        vals = np.array([d[k] for k in keys])
-        vals = vals / vals.sum()
-        cur = self.cur
-
-        if cur.child_masses is None:
-            cur.child_masses = cur.mass * vals
-            cur.context = context
-
-        a = cur.sample()
-        if a not in cur.active_children:
-            cur.active_children[a] = Node(
-                idx=a, mass=cur.child_masses[a], parent=cur, token=keys[a],
-            )
-        self.cur = cur.active_children[a]
-        return keys[a]
-
-
-class DictTraceSWOR(DictTracer):
-    """Dict-based TraceSWOR."""
-    def __enter__(self):
-        self.cur = self.root
-
-    def __exit__(self, *args):
-        self.cur.mass = 0
-        self.cur.update()
-```
-
-</details>
-
-Now we verify SIS:
-
-```python
-tracer = DictTraceSWOR()
-have = 0
-while tracer.root.mass > 0:
-    with tracer:
-        M = 1
-        finished = sequential_importance_sampling(p_lm, q_lm, M=M, draw=tracer)
-        Z_hat = sum(particle.weight for particle in finished) / M
-        have += Z_hat * tracer.cur.mass
-
-assert abs(have - 1.0) < 1e-10, f'SIS is not unbiased! Z={have}'
-print('✓ SIS is unbiased (exact verification)')
-```
-
-Here is the trace tree for SIS:
-
-{% notebook testing-randomized-algorithms.ipynb cells[4:5] %}
+{% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
 
 ### Sequential Importance Resampling
 
@@ -510,34 +623,17 @@ def sequential_importance_resampling(p, q, M, tau, draw=sample_dict):
     return finished
 ```
 
-We can trace SIR the same way:
-
-```python
-tracer = DictTraceSWOR()
-have = 0
-while tracer.root.mass > 0:
-    with tracer:
-        M = 3
-        finished = sequential_importance_resampling(
-            p_lm, q_lm, tau=0.75, M=M, draw=tracer)
-        Z_hat = sum(particle.weight for particle in finished) / M
-        have += Z_hat * tracer.cur.mass
-
-assert abs(have - 1.0) < 1e-10
-print('✓ SIR is unbiased (exact verification)')
-```
-
 Here is the trace tree for SIR&mdash;notice that with resampling we have more traces
 than without. This is because there are more places that request random
 decisions in the code.
 
-{% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
+{% notebook testing-randomized-algorithms.ipynb cells[6:7] %}
 
 **Pro tip:** Make sure the total mass decreases quickly, as the loop will halt
 only when the total mass is zero. This requires the support to be finite. For
 problems where the support is large but finite, it may be a reasonable heuristic
 to stop early if the remaining mass is small, trading exactness for an unbiased
-*estimate* (via techniques from [Lew et al., 2020](https://arxiv.org/abs/2002.09067)).<footnote>Traces are a combinatorial space, so this strategy is only practical for smaller problems. But "smaller problems" is exactly the regime where tests should live&mdash;small enough to verify exactly, but complex enough to exercise the algorithm's logic.</footnote>
+*estimate* (via techniques from [Shi et al., 2020](https://arxiv.org/abs/2002.09067)).<footnote>Traces are a combinatorial space, so this strategy is only practical for smaller problems. But "smaller problems" is exactly the regime where tests should live&mdash;small enough to verify exactly, but complex enough to exercise the algorithm's logic.</footnote>
 
 
 ## Some Miscellaneous Thoughts
