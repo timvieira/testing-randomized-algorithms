@@ -117,7 +117,7 @@ elements). We want to sample from the <em>conditional</em> distribution $p(\cdot
 C)$. But rather than returning a plain sample, we want a <em>properly weighted</em>
 sample $(x, w)$&mdash;a sample-weight pair that can be used for unbiased estimation.</p>
 <p>The following algorithm, which we call AWRS (from <a href="https://arxiv.org/abs/2504.05410">Lipkin et al., 2025</a>), does exactly this. Here is the pseudocode from the paper:</p>
-<p><img alt="AWRS algorithm pseudocode" src="../images/awrs-algorithm.png" /></p>
+<p><img alt="AWRS algorithm pseudocode" src="./images/awrs-algorithm.png" /></p>
 <p>The idea: run rejection sampling twice. The first pass finds a conditioned
 sample $x^*$ while tracking the total rejected probability mass $\psi$. The
 second pass generates additional rejections to get a count $n$. The weight
