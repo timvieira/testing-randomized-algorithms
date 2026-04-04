@@ -181,25 +181,28 @@ Compare the `else` branch and the `return` statement across the four variants.
 Our job is to build testing strategies that catch the buggy ones&mdash;ideally
 without needing to know which line is wrong.
 
-But first: what *should* the algorithm do?
+But before we can test *anything*, we need to answer the most important
+question in all of software testing:
 
-### Proper Weighting
+### What Should This Code Do?
 
-AWRS is supposed to generate "properly weighted samples for the distribution
-$\widetilde{p} = Z \cdot p$." Let's unpack that.
+You cannot test code without a specification. For randomized algorithms, the
+specification comes from theory&mdash;and translating theory into a checkable
+property is half the battle. We'll keep coming back to this question for every
+algorithm in this post.
 
-A sampler $Q$ that outputs pairs $(x, w)$ is **properly weighted** for an
-unnormalized target $\widetilde{p}$ if for all $x' \in \mathcal{X}$:
+For AWRS, the specification is: it should return a sample-weight pair $(x, w)$
+such that $w \cdot \mathbf{1}[x = x']$ is an **unbiased estimator** of the
+unnormalized conditional distribution for every $x' \in \mathcal{X}$:
 
 $$
-\mathop{\mathbb{E}}_{(x,w) \sim Q} \left[ w \cdot \mathbf{1}[x = x'] \right]
+\mathop{\mathbb{E}}_{(x,w) \sim \text{AWRS}} \left[ w \cdot \mathbf{1}[x = x'] \right]
 =
-\widetilde{p}(x')
+p(x') \cdot \mathbf{1}[x' \in C]
 $$
 
-In our case, $\widetilde{p}(x) = p(x) \cdot \mathbf{1}[x \in C]$&mdash;the
-unnormalized conditional distribution with normalizing constant $Z = \sum_{x \in
-C} p(x)$.<footnote>The textbook definition quantifies over all bounded measurable functions $f$, requiring $\mathop{\mathbb{E}}[w \cdot f(x)] = \sum_x \widetilde{p}(x) f(x)$. For finite $\mathcal{X}$, taking $f$ to be element-wise indicators is sufficient. You should convince yourself of this.</footnote>
+The right-hand side is the unnormalized target&mdash;$p$ restricted to the
+condition $C$, with normalizing constant $Z = \sum_{x \in C} p(x)$.
 
 Note that you may often need to tweak definitions, narrow or broaden the scope
 of theory in order to suit your code's intended use cases. This is an important
@@ -485,15 +488,17 @@ anything that makes discrete random choices through a hookable interface. Let's
 apply it to **sequential importance sampling** (SIS) and **sequential importance
 resampling** (SIR).
 
-### A Simple Sequence Model
+### Setup: Target and Proposal
 
-We need a way to generate sequences. A "language model" here is just a function
-that, given a prefix, returns a distribution over the next token (including a
-special end-of-sequence token). We define a target $p$ and a proposal $q$:
+SIS and SIR require two things: a **target distribution** $p$ and a **proposal
+distribution** $q$, both with incremental interfaces. We sample sequences from
+$q$ and reweight by $p/q$ at each step to correct for the mismatch. Both are
+implemented with the same `SimpleLM` class, which maps prefixes to next-token
+distributions via `p_next`.
 
 ```python
-p_lm = SimpleLM({('a', 'a'): 0.3, ('b', 'b', 'b'): 0.6, (): 0.1})
-q_lm = SimpleLM({('a', 'a'): 0.2, ('b', 'b', 'b'): 0.7, (): 0.1})
+p = SimpleLM({('a', 'a'): 0.3, ('b', 'b', 'b'): 0.6, (): 0.1})
+q = SimpleLM({('a', 'a'): 0.2, ('b', 'b', 'b'): 0.7, (): 0.1})
 ```
 
 <details class="derivation" markdown="1">
@@ -515,7 +520,7 @@ class SimpleLM:
         self.sequences = sequences
 
     def p_next(self, prefix):
-        """Return distribution over next token given prefix."""
+        """Return conditional distribution over next token given prefix."""
         dist = {}
         for seq, prob in self.sequences.items():
             if len(seq) < len(prefix):
@@ -527,7 +532,8 @@ class SimpleLM:
             else:
                 token = seq[len(prefix)]
                 dist[token] = dist.get(token, 0) + prob
-        return dist
+        total = sum(dist.values())
+        return {k: v / total for k, v in dist.items()}
 
 def sample_dict(d, context=None):
     """Sample a key from a dict-valued distribution."""
@@ -542,8 +548,14 @@ def sample_dict(d, context=None):
 
 ### Sequential Importance Sampling
 
-SIS generates weighted samples from $p$ using proposal $q$. At each step, it
-extends each particle by sampling from $q$ and reweighting by $p/q$:
+Again: *what should this code do?* SIS should produce weighted particles whose
+weights are unbiased estimates of the normalizing constant $Z =
+\sum_{\mathbf{x}} p(\mathbf{x})$. Specifically, $\frac{1}{M} \sum_m w_m$
+should be an unbiased estimate of $Z$&mdash;in this case, $Z = 1$ since our
+target is a proper distribution.
+
+At each step, SIS extends each particle by sampling from the proposal $q$ and
+reweighting by $p/q$:
 
 ```python
 from collections import namedtuple
@@ -569,17 +581,15 @@ def sequential_importance_sampling(p, q, M, draw=sample_dict):
     return finished
 ```
 
-What is this code supposed to do? The theory says that $\frac{1}{M} \sum_m w_m$
-is an unbiased estimate of the partition function $Z =
-\sum_{\mathbf{x}} p(\mathbf{x})$&mdash;in this case, $Z = 1$ since our target
-is already normalized.
-
 Since our `Tracer` handles both arrays and dicts, the same `TraceSWOR` works
 here without modification. Here is the trace tree for SIS:
 
 {% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
 
 ### Sequential Importance Resampling
+
+*What should this code do?* The same thing as SIS&mdash;produce an unbiased
+estimate of $Z$&mdash;but with lower variance via adaptive resampling.
 
 SIR adds a resampling step when the effective sample size drops below a
 threshold. This creates more diverse particles but also more execution traces:
