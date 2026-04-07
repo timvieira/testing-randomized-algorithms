@@ -25,6 +25,10 @@ tags: testing, sampling, algorithms, monte-carlo, program-tracing
 }
 </style>
 
+<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 1.5em; border-radius: 4px; font-size: 0.95em;">
+<b>Draft</b> — This article is a work in progress. Content may change.
+</div>
+
 Randomized algorithms are hard to test. Their outputs are, by design,
 unpredictable&mdash;and that unpredictability is a *feature*, not a bug. It is what
 gives them useful guarantees like unbiasedness and computational efficiency. But
