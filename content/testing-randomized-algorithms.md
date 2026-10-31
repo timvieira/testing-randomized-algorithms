@@ -504,7 +504,7 @@ Now we can verify all four AWRS variants *exactly*:
 {% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
 
 This is not a statistical test. It is an *exact* check (modulo floating point)
-that the proper weighting condition holds. No confidence intervals, no
+that the proper weighting condition holds.<footnote>The difference between `target` and `prob` is not zero&mdash;it rarely will be with floating point numbers. But `np.allclose` checks that they agree to within a reasonable tolerance ($\approx 10^{-8}$).</footnote> No confidence intervals, no
 squinting at log&ndash;log plots. The tracer gives a definitive yes or no for each
 variant. **D is out**, and A is the only survivor.
 
@@ -520,7 +520,7 @@ percent&mdash;which is why D's single run looked just like A's.
 The tracer computes more than a pass/fail bit. Collecting the second moment
 alongside the first gives the exact squared bias and the exact variance $V$ of
 each variant. The bias of the average stays fixed as $M$ grows while its
-variance shrinks like $V/M$, so the two cross at $M^* = V / 	ext{bias}^2$.
+variance shrinks like $V/M$, so the two cross at $M^* = V / \text{bias}^2$.
 Below $M^*$, the bug is buried in the noise.
 
 {% notebook testing-randomized-algorithms.ipynb cells[6:7] %}
@@ -530,7 +530,6 @@ single run catches it. C needs a few hundred, so it takes careful averaging. D
 needs about fifteen million, and no reasonable Monte Carlo test would ever see
 it. The tracer took a fraction of a second.
 
-<footnote>The difference between `target` and `prob` is not zero&mdash;it rarely will be with floating point numbers. But `np.allclose` checks that they agree to within a reasonable tolerance ($\approx 10^{-8}$).</footnote>
 
 
 ## Strategy 3: Testing the Whole Pipeline
