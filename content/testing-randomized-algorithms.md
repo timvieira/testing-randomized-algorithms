@@ -475,7 +475,7 @@ class TraceSWOR(Tracer):
 
 Now we can verify all four AWRS variants *exactly*:
 
-{% notebook testing-randomized-algorithms.ipynb cells[4:5] %}
+{% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
 
 This is not a statistical test. It is an *exact* check (modulo floating point)
 that the proper weighting condition holds. No confidence intervals, no
@@ -501,8 +501,8 @@ implemented with the same `SimpleLM` class, which maps prefixes to next-token
 distributions via `p_next`.
 
 ```python
-p = SimpleLM({('a', 'a'): 0.3, ('b', 'b', 'b'): 0.6, (): 0.1})
-q = SimpleLM({('a', 'a'): 0.2, ('b', 'b', 'b'): 0.7, (): 0.1})
+p_lm = SimpleLM({('a', 'a'): 0.3, ('b', 'b', 'b'): 0.6, (): 0.1})
+q_lm = SimpleLM({('a', 'a'): 0.2, ('b', 'b', 'b'): 0.7, (): 0.1})
 ```
 
 <details class="derivation" markdown="1">
@@ -513,7 +513,7 @@ EOS = '<EOS>'  # end-of-sequence marker
 
 class SimpleLM:
     """
-    A simple sequence model defined by a probabilistic context-free grammar.
+    A sequence model defined by an explicit, finite distribution over strings.
     Maps prefixes to next-token distributions (as dicts).
     """
     def __init__(self, sequences):
@@ -588,7 +588,7 @@ def sequential_importance_sampling(p, q, M, draw=sample_dict):
 Since our `Tracer` handles both arrays and dicts, the same `TraceSWOR` works
 here without modification. Here is the trace tree for SIS:
 
-{% notebook testing-randomized-algorithms.ipynb cells[5:6] %}
+{% notebook testing-randomized-algorithms.ipynb cells[7:8] %}
 
 ### Sequential Importance Resampling
 
@@ -641,7 +641,7 @@ Here is the trace tree for SIR&mdash;notice that with resampling we have more tr
 than without. This is because there are more places that request random
 decisions in the code.
 
-{% notebook testing-randomized-algorithms.ipynb cells[6:7] %}
+{% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
 
 **Pro tip:** Make sure the total mass decreases quickly, as the loop will halt
 only when the total mass is zero. This requires the support to be finite. For
