@@ -1,7 +1,10 @@
 - [ ] Extract the tracing function into a small library (`tracing.py`) with tests.
   Should be pip-installable. Add `pyproject.toml`, `test_tracing.py`.
 
-- [ ] Make SIS/SIR estimate a nontrivial Z (e.g., Z=2). Requires changing the
-  weight update to use unnormalized target factors divided by normalized proposal,
-  so the product of incremental weights telescopes correctly. Currently Z=1
-  because both target and proposal are normalized.
+- [x] Make SMC estimate a nontrivial Z. Done by making AWRS the SMC proposal
+  under a token-level constraint, so Z = P(constraint) < 1.
+
+- [x] Reorder the AWRS variants so each testing strategy catches one more bug
+  (B: single run, C: multiple runs, D: tracing only).
+
+- [x] Remove duplicated code from rendered notebook cells.

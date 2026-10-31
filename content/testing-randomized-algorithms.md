@@ -39,7 +39,13 @@ This post sketches some ideas for how to think about testing randomized
 algorithms&mdash;especially the kinds of algorithms that we use for probabilistic
 inference. I'll present a concrete sampling algorithm with several plausible
 implementations&mdash;some correct, some subtly broken&mdash;and develop
-progressively more powerful testing strategies to tell them apart.
+progressively more powerful testing strategies to tell them apart. Each
+strategy catches a bug that the previous one missed.
+
+The algorithm is a small building block. Its job is to propose the next token
+inside sequential Monte Carlo (SMC) for constrained generation from language
+models. Testing the block in isolation is only half the job, so at the end
+we'll plug it into SMC and test the whole pipeline.
 
 ## A Tricky Little Sampling Algorithm
 
@@ -83,7 +89,8 @@ def awrs_a(p, cond, draw=sample_categorical):
     xc0 = None
     for i in range(2):
         while True:
-            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            q = p_cond / p_cond.sum()
+            x = draw(q, context=('awrs', i, xc0))
             if cond(x):
                 if i == 0:
                     xc0 = x
@@ -108,7 +115,8 @@ def awrs_b(p, cond, draw=sample_categorical):
     xc0 = None
     for i in range(2):
         while True:
-            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            q = p_cond / p_cond.sum()
+            x = draw(q, context=('awrs', i, xc0))
             if cond(x):
                 if i == 0:
                     xc0 = x
@@ -133,7 +141,8 @@ def awrs_c(p, cond, draw=sample_categorical):
     xc0 = None
     for i in range(2):
         while True:
-            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            q = p_cond / p_cond.sum()
+            x = draw(q, context=('awrs', i, xc0))
             if cond(x):
                 if i == 0:
                     xc0 = x
@@ -157,22 +166,23 @@ def awrs_d(p, cond, draw=sample_categorical):
     xc0 = None
     for i in range(2):
         while True:
-            x = draw(p_cond / p_cond.sum(), context=('awrs', i, xc0))
+            q = p_cond / p_cond.sum()
+            x = draw(q, context=('awrs', i, xc0))
             if cond(x):
                 if i == 0:
                     xc0 = x
                 break
             else:
                 if i == 0:
-                    psi += p_cond[x]
+                    psi += q[x]
                 p_cond[x] = 0
             n += 1
-    return xc0, (1 - psi) / (n + 2)
+    return xc0, (1 - psi) / (n + 1)
 ```
 
 </details>
 
-Each variant differs from the others by a single line. I encourage you to read
+The variants differ from one another by a line or two. I encourage you to read
 them carefully and try to spot the differences before scrolling further.
 
 <details class="derivation" markdown="1">
@@ -219,10 +229,9 @@ the equation we can compute and which things we need to estimate. Let's make a
 concrete test case:
 
 ```python
-np.random.seed(0)
-N = 4
-p = np.random.dirichlet(np.ones(N))  # random distribution over {0,...,N-1}
-cond = np.random.uniform(0, 1, size=N) < 0.5  # random subset
+p = np.array([0.5, 0.3, 0.15, 0.04, 0.01])  # a distribution with a long tail
+cond = np.array([True, False, True, False, False])  # the "good" elements
+N = len(p)
 
 Z = p[cond].sum()
 target = p * cond  # unnormalized target (not a distribution!)
@@ -236,7 +245,8 @@ average.
 
 {% notebook testing-randomized-algorithms.ipynb cells[1:2] %}
 
-Is this error small enough? How do you know?
+Is this error small enough? How do you know? (Variant D has the smallest
+error of the four.)
 
 This is the central problem with Monte Carlo testing: a single number tells you
 almost nothing without a reference frame. We need to know what *should* happen
@@ -316,8 +326,15 @@ values are logs. The line-fitting code does the latter ($\texttt{np.polyfit}$ on
 $\log x$, $\log y$), but for visual inspection, log-scaled axes are usually
 clearer because you can read off the original quantities directly.
 
-The fitted slope should be close to $-0.5$ (we're plotting error, not
-squared error), which is exactly what we see.
+For a correct estimator, the fitted slope should be close to $-0.5$ (we're
+plotting error, not squared error). Variant B fails this test plainly: its
+error stops going down after a few dozen samples and the slope is positive.
+**B is out.**
+
+The other three look fine. C's slope is a little shallow, but the slope of a
+single run is itself a noisy statistic&mdash;rerunning the correct variant with
+other seeds gives slopes anywhere from about $-0.25$ to $-0.75$. D's curve is
+indistinguishable from A's. That's not a coincidence, and we'll see why later.
 
 ### What a Single Run Can and Can't Tell Us
 
@@ -332,6 +349,10 @@ $\frac{1}{M+1} \sum_{m=1}^{M} X^{(m)}$ instead of $\frac{1}{M} \sum_{m=1}^{M}
 X^{(m)}$. This estimator is *biased*&mdash;it systematically underestimates the
 target&mdash;but *consistent*, because the bias factor $M/(M+1) \to 1$. The
 single-run convergence plot would look nearly identical.
+
+The same thing is happening to C. Its bias is real, but at a thousand samples
+it is still smaller than the noise. A longer run would expose it eventually,
+but how long is long enough? A single run has no way to tell us.
 
 ### Averaging Over Multiple Runs
 
@@ -357,9 +378,14 @@ For the i.i.d. unbiased case, the variance term is $V/M$. So:
 
 {% notebook testing-randomized-algorithms.ipynb cells[3:4] %}
 
-The observed curve hugs the theoretical $V/M$ line, which is strong evidence
-that our sampler is properly weighted&mdash;not just consistent, but unbiased,
-with the right variance.
+A and D hug the theoretical $V/M$ line, which is strong evidence that they are
+properly weighted&mdash;not just consistent, but unbiased, with the right
+variance. B flattens out, as before. C is the interesting one: it tracks the
+line for small $M$ and then lifts off as the variance shrinks below its squared
+bias. Averaging over a thousand runs makes the gap far larger than the
+confidence band. **C is out.**
+
+D, on the other hand, has now passed every test we've thrown at it.
 
 But Monte Carlo testing is still a *blunt instrument*. Small biases hide
 easily in the noise, and you need many runs to have any statistical power. For
@@ -480,33 +506,103 @@ Now we can verify all four AWRS variants *exactly*:
 This is not a statistical test. It is an *exact* check (modulo floating point)
 that the proper weighting condition holds. No confidence intervals, no
 squinting at log&ndash;log plots. The tracer gives a definitive yes or no for each
-variant.
+variant. **D is out**, and A is the only survivor.
+
+D's bug is in the `else` branch: it accumulates the *normalized* probability
+`q[x]` instead of the remaining mass `p_cond[x]`. The two agree on the first
+rejection, because `p_cond` still sums to one. They differ only when the first
+pass rejects two or more elements. With our long-tailed `p`, that happens in
+about one run in twenty, and even then the weight is off by only a couple of
+percent&mdash;which is why D's single run looked just like A's.
+
+### How Many Samples Would Monte Carlo Need?
+
+The tracer computes more than a pass/fail bit. Collecting the second moment
+alongside the first gives the exact squared bias and the exact variance $V$ of
+each variant. The bias of the average stays fixed as $M$ grows while its
+variance shrinks like $V/M$, so the two cross at $M^* = V / 	ext{bias}^2$.
+Below $M^*$, the bug is buried in the noise.
+
+{% notebook testing-randomized-algorithms.ipynb cells[6:7] %}
+
+This is the ladder we just climbed. B surfaces after a few dozen samples, so a
+single run catches it. C needs a few hundred, so it takes careful averaging. D
+needs about fifteen million, and no reasonable Monte Carlo test would ever see
+it. The tracer took a fraction of a second.
 
 <footnote>The difference between `target` and `prob` is not zero&mdash;it rarely will be with floating point numbers. But `np.allclose` checks that they agree to within a reasonable tolerance ($\approx 10^{-8}$).</footnote>
 
 
-## Strategy 3: Testing Sequential Algorithms
+## Strategy 3: Testing the Whole Pipeline
 
-Program tracing is not limited to simple sampling algorithms. It works on
-anything that makes discrete random choices through a hookable interface. Let's
-apply it to **sequential importance sampling** (SIS) and **sequential importance
-resampling** (SIR).
+AWRS is not meant to be used on its own. In [Lipkin et al., 2025](https://arxiv.org/abs/2504.05410),
+it is the proposal step inside sequential Monte Carlo for generating text from
+a language model subject to a constraint. Each particle asks AWRS for a next
+token that satisfies the constraint, and multiplies its weight by the weight
+that AWRS returns.
 
-### Setup: Target and Proposal
+Program tracing is not limited to a single call of a sampling routine. It works
+on anything that makes discrete random choices through a hookable interface, so
+we can trace the whole pipeline at once&mdash;every AWRS call in every particle,
+plus the resampling steps.
 
-SIS and SIR require two things: a **target distribution** $p$ and a **proposal
-distribution** $q$, both with incremental interfaces. We sample sequences from
-$q$ and reweight by $p/q$ at each step to correct for the mismatch. Both are
-implemented with the same `SimpleLM` class, which maps prefixes to next-token
-distributions via `p_next`.
+### What Should This Code Do?
+
+Let $p$ be a language model over strings, and let $C$ be a constraint that can
+be checked one token at a time. The unnormalized target is
+
+$$
+\gamma(\mathbf{x}) = p(\mathbf{x}) \cdot \mathbf{1}[\mathbf{x} \in C]
+$$
+
+and its normalizing constant $Z = \sum_{\mathbf{x}} \gamma(\mathbf{x})$ is the
+probability that a string drawn from $p$ satisfies the constraint. SMC returns
+$M$ weighted particles $(\mathbf{x}_m, w_m)$, and the specification is the
+proper weighting condition from before, lifted from tokens to strings:
+
+$$
+\mathop{\mathbb{E}} \left[ \frac{1}{M} \sum_{m=1}^{M} w_m \cdot \mathbf{1}[\mathbf{x}_m = \mathbf{x}'] \right]
+=
+\gamma(\mathbf{x}')
+$$
+
+for every string $\mathbf{x}'$. Summing over $\mathbf{x}'$ gives the more
+familiar statement that $\frac{1}{M} \sum_m w_m$ is an unbiased estimate of $Z$.
+Checking every string is the stronger test: a bug that moves mass from one
+string to another without changing the total would slip past a check on $Z$
+alone.
+
+Why should this hold? Proper weighting composes. At step $t$, AWRS returns a
+token and a weight that are properly weighted for $p(\cdot \mid
+\mathbf{x}_{<t})$ restricted to the allowed tokens. Multiplying these weights
+along a string gives a properly weighted sample for the product of the
+per-step targets, which is $\gamma$. Resampling preserves proper weighting as
+long as every resampled particle carries the average weight.
+
+### Setting Up a Test Case
+
+The language model is a small, explicit distribution over strings. The
+constraint says that a `b` must be followed by an `a` or by the end of the
+string, so `bb` and `bc` are ruled out:
 
 ```python
-p_lm = SimpleLM({('a', 'a'): 0.3, ('b', 'b', 'b'): 0.6, (): 0.1})
-q_lm = SimpleLM({('a', 'a'): 0.2, ('b', 'b', 'b'): 0.7, (): 0.1})
+lm = SimpleLM({
+    (): 0.1, ('a',): 0.1, ('a', 'a'): 0.1, ('a', 'b'): 0.1,
+    ('b',): 0.1, ('b', 'a'): 0.15, ('b', 'b'): 0.25, ('b', 'c'): 0.1,
+})
+
+VOCAB = ['a', 'b', 'c', EOS]
+
+def allowed(prefix, token):
+    """After a 'b', the next token must be 'a' or EOS."""
+    return not (prefix[-1:] == ('b',) and token not in ('a', EOS))
+
+target_lm = {s: prob * is_valid(s) for s, prob in lm.sequences.items()}
+Z_lm = sum(target_lm.values())  # = 0.65, not 1
 ```
 
 <details class="derivation" markdown="1">
-<summary>Utilities: <code>SimpleLM</code>, <code>sample_dict</code></summary>
+<summary>Utilities: <code>SimpleLM</code>, <code>is_valid</code></summary>
 
 ```python
 EOS = '<EOS>'  # end-of-sequence marker
@@ -539,109 +635,83 @@ class SimpleLM:
         total = sum(dist.values())
         return {k: v / total for k, v in dist.items()}
 
-def sample_dict(d, context=None):
-    """Sample a key from a dict-valued distribution."""
-    keys = list(d.keys())
-    vals = np.array([d[k] for k in keys])
-    vals = vals / vals.sum()
-    idx = np.random.choice(len(keys), p=vals)
-    return keys[idx]
+def is_valid(string):
+    return all(allowed(string[:t], string[t]) for t in range(len(string)))
 ```
 
 </details>
 
-### Sequential Importance Sampling
-
-Again: *what should this code do?* SIS should produce weighted particles whose
-weights are unbiased estimates of the normalizing constant $Z =
-\sum_{\mathbf{x}} p(\mathbf{x})$. Specifically, $\frac{1}{M} \sum_m w_m$
-should be an unbiased estimate of $Z$&mdash;in this case, $Z = 1$ since our
-target is a proper distribution.
-
-At each step, SIS extends each particle by sampling from the proposal $q$ and
-reweighting by $p/q$:
+Here is the sampler. At each step, every unfinished particle extends itself
+with AWRS and multiplies in the AWRS weight. When the effective sample size
+drops below `tau` times the number of live particles, it resamples. With
+`tau=0` it never resamples, and the algorithm reduces to sequential importance
+sampling (SIS); with `tau>0` it is sequential importance resampling (SIR).
 
 ```python
 from collections import namedtuple
 Particle = namedtuple('Particle', 'weight, string')
 
-def sequential_importance_sampling(p, q, M, draw=sample_dict):
+def smc(lm, M, tau, awrs, draw=sample_categorical):
     unfinished = [Particle(1, ()) for _ in range(M)]
     finished = []
     while unfinished:
         next_unfinished = []
         for particle in unfinished:
-            P = p.p_next(particle.string)
-            Q = q.p_next(particle.string)
-            x = draw(Q)
+            P = lm.p_next(particle.string)
+            p = np.array([P.get(v, 0) for v in VOCAB])
+            i, w = awrs(p, lambda i: allowed(particle.string, VOCAB[i]), draw=draw)
+            x = VOCAB[i]
             if x == EOS:
-                finished.append(Particle(
-                    particle.weight * P[x] / Q[x], particle.string))
+                finished.append(Particle(particle.weight * w, particle.string))
             else:
-                next_unfinished.append(Particle(
-                    particle.weight * P[x] / Q[x],
-                    particle.string + (x,)))
-        unfinished = next_unfinished
-    return finished
-```
-
-Since our `Tracer` handles both arrays and dicts, the same `TraceSWOR` works
-here without modification. Here is the trace tree for SIS:
-
-{% notebook testing-randomized-algorithms.ipynb cells[7:8] %}
-
-### Sequential Importance Resampling
-
-*What should this code do?* The same thing as SIS&mdash;produce an unbiased
-estimate of $Z$&mdash;but with lower variance via adaptive resampling.
-
-SIR adds a resampling step when the effective sample size drops below a
-threshold. This creates more diverse particles but also more execution traces:
-
-```python
-def sequential_importance_resampling(p, q, M, tau, draw=sample_dict):
-    unfinished = [Particle(1, ()) for _ in range(M)]
-    finished = []
-    t = 0
-    while True:
-        t += 1
-        next_unfinished = []
-        for m, particle in enumerate(unfinished):
-            P = p.p_next(particle.string)
-            Q = q.p_next(particle.string)
-            x = draw(Q, context=(t, m))
-            if x == EOS:
-                finished.append(Particle(
-                    particle.weight * P[x] / Q[x], particle.string))
-            else:
-                next_unfinished.append(Particle(
-                    particle.weight * P[x] / Q[x],
-                    particle.string + (x,)))
+                next_unfinished.append(Particle(particle.weight * w,
+                                                particle.string + (x,)))
         unfinished = next_unfinished
         if not unfinished:
             break
 
-        W = sum(particle.weight for particle in unfinished)
-        W2 = sum(particle.weight**2 for particle in unfinished)
-        M_eff = W**2 / W2
-
-        if M_eff < tau * M:
-            distr = {k: particle.weight / W
-                     for k, particle in enumerate(unfinished)}
-            indices = [draw(distr, context=('resample', t, m))
-                       for m in range(M)]
-            avg_weight = W / M
-            unfinished = [Particle(avg_weight, unfinished[k].string)
+        W = np.array([particle.weight for particle in unfinished])
+        if W.sum()**2 / (W**2).sum() < tau * len(unfinished):
+            indices = [draw(W / W.sum(), context='resample') for _ in unfinished]
+            unfinished = [Particle(W.sum() / len(unfinished), unfinished[k].string)
                           for k in indices]
 
     return finished
 ```
 
-Here is the trace tree for SIR&mdash;notice that with resampling we have more traces
-than without. This is because there are more places that request random
-decisions in the code.
+The same `draw` hook is passed down to every AWRS call and to the resampling
+step, so a single tracer sees every random choice the pipeline makes.
+
+### Sequential Importance Sampling
+
+One particle is enough to check the proper weighting condition for SIS. We run
+it with each AWRS variant, plus one more contender: *locally constrained
+decoding*, which samples each token from the language model restricted to the
+allowed tokens and ignores the weight. It is the obvious way to do constrained
+generation.
+
+{% notebook testing-randomized-algorithms.ipynb cells[8:9] %}
+
+Every bug is caught through the pipeline, including D. After a `b`, two of
+the four tokens are forbidden, so AWRS's first pass can reject twice in one
+step&mdash;exactly the situation that triggers D's bug.
+
+The last line is the most instructive one. Locally constrained decoding never
+produces an invalid string, but it gets the probabilities wrong: it
+over-represents strings whose prefixes leave little room under the constraint.
+Here, it puts too much mass on `b` and `ba`, because it never pays for the
+probability that `b` would have been followed by a forbidden token. This bias
+is the reason AWRS returns a weight in the first place.
+
+### Sequential Importance Resampling
+
+Resampling is just one more random choice, made through the same `draw` hook,
+so the tracer needs no changes. Two particles are enough to exercise it:
 
 {% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
+
+The correct implementation passes and D is still caught. But notice the
+number of traces: 162 with one particle, and nearly 30,000 with two.
 
 **Pro tip:** Make sure the total mass decreases quickly, as the loop will halt
 only when the total mass is zero. This requires the support to be finite. For
@@ -671,7 +741,7 @@ A few principles I've found useful:
   don't understand the theory behind your algorithm, you don't know what to test.
 
 - **Small exact tests beat large approximate tests.** A tracer that exhaustively
-  checks a 4-element distribution is worth more than a Monte Carlo test with
+  checks a 5-element distribution is worth more than a Monte Carlo test with
   10,000 samples. The tracer gives you a definitive yes/no; the Monte Carlo test
   gives you a squiggly line that you have to interpret.
 
