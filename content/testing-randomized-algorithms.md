@@ -435,6 +435,25 @@ The implementation uses a trie data structure that mirrors the branching structu
 program's random choices. Each node in the trie corresponds to a decision
 point, and its children correspond to the possible outcomes.
 
+Each node stores the probability mass that hasn't been explored below it. A
+node is created the first time the program reaches it, holding the probability
+of the path that leads there, so at the end of a trace `tracer.cur.mass` is
+that trace's probability; this is how the checks below weight each output. When
+a trace finishes, its mass is subtracted from every node on the way back up to
+the root. Choosing children in proportion to their unexplored mass then never
+revisits a finished trace, and the root's mass is the total probability of the
+traces not yet run.
+
+Here is the tracer at work on variant A with our test case. Each step runs the
+program once more and adds one trace to the trie. Node colors mark which pass of
+AWRS made the choice, and a node fades as the probability mass below it is
+explored. The order menu is explained [below](#which-trace-next).
+
+<div id="trace-replay"></div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="../widgets/trace-data.js"></script>
+<script src="../widgets/trace-replay.js"></script>
+
 The beautiful thing about `TraceSWOR` is that it works as a context manager:
 each `with tracer:` block explores one trace, and when it exits, that trace's
 mass is zeroed out so we never revisit it. We loop until the root's mass hits
@@ -537,16 +556,6 @@ class TraceSWOR(Tracer):
 ```
 
 </details>
-
-Here is the tracer at work on variant A with our test case. Each step runs the
-program once more and adds one trace to the trie. Node colors mark which pass of
-AWRS made the choice, and a node fades as the probability mass below it is
-explored. The order menu is explained [below](#which-trace-next).
-
-<div id="trace-replay"></div>
-<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="../widgets/trace-data.js"></script>
-<script src="../widgets/trace-replay.js"></script>
 
 ### Exact Verification
 
