@@ -3,11 +3,10 @@
 Before publishing
 - [ ] Remove the draft banner and set the date.
 
-Optional
-- [ ] Extract the tracing function into a small library (`tracing.py`) with tests.
-  Should be pip-installable. Add `pyproject.toml`, `test_tracing.py`.
-
 ## Done
+
+- [x] `program_tracing` library in this repo (mirrors conditional-poisson-sampling):
+  tests for the library and for the article's claims, ruff, coverage, CI, Makefile.
 
 - [x] Investigated why SIS and SIR (2 particles) have identical Var(Z-hat): in
   the toy model, resampling only fires right before a deterministic final EOS

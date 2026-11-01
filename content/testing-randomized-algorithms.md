@@ -440,6 +440,11 @@ each `with tracer:` block explores one trace, and when it exits, that trace's
 mass is zeroed out so we never revisit it. We loop until the root's mass hits
 zero&mdash;meaning we've exhausted every possible execution.
 
+The tracer is also available as a small, tested library,
+[`program_tracing`](https://github.com/timvieira/testing-randomized-algorithms),
+in this post's repository. It includes a `traces(program)` helper that runs this
+loop for you.
+
 <details class="derivation" markdown="1">
 <summary>Tracer implementation</summary>
 
@@ -452,6 +457,7 @@ class Node:
         self.parent = parent
         self.token = token        # label for visualization
         self.child_masses = None  # set on first visit
+        self.keys = None          # outcomes of the choice made here
         self.active_children = {}
         self._mass = mass         # remember original mass
         self.context = None
@@ -483,7 +489,7 @@ class Tracer:
         """Drop-in replacement for any sampling function."""
         if isinstance(p, dict):
             keys = list(p.keys())
-            vals = np.array([p[k] for k in keys])
+            vals = np.array([p[k] for k in keys], dtype=float)
         else:
             p = np.asarray(p, dtype=float)
             keys = list(range(len(p)))
@@ -493,7 +499,11 @@ class Tracer:
 
         if cur.child_masses is None:
             cur.child_masses = cur.mass * vals
+            cur.keys = keys
             cur.context = context
+        elif keys != cur.keys:
+            raise ValueError('the program made a different choice at the same point '
+                             'of two traces; it must be deterministic given its draws')
 
         a = self.choose(cur)
         if a not in cur.active_children:
@@ -519,6 +529,7 @@ class TraceSWOR(Tracer):
     """
     def __enter__(self):
         self.cur = self.root
+        return self
 
     def __exit__(self, *args):
         self.cur.mass = 0
