@@ -24,6 +24,7 @@ Optional
   needs replay and is fragile.
 - [x] Interactive trace replay (D3), limitations section, takeaways recap.
 - [x] Plots in Plotly, with plotting code in hidden helpers.
-- [x] Credit Shi et al. (2020) for the tracing strategy.
+- [x] Credit Shi et al. (2020) for the tracing strategy, and cite WebPPL
+  (Goodman & Stuhlmüller, 2014) for enumeration with continuations.
 - [x] Match the prose's notation to the paper's pseudocode (x_c, psi_0).
 - [x] CLAUDE.md: Pages serves from `master`; math is MathJax.

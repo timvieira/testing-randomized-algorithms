@@ -428,8 +428,12 @@ probability, and combine all traces to compute the exact output distribution.
 
 The tracing strategy comes from
 [Shi et al., 2020](https://arxiv.org/abs/2002.09067), who use it to sample
-without replacement from programs such as sequence models. The implementation
-uses a trie data structure that mirrors the branching structure of the
+without replacement from programs such as sequence models. The same idea
+underlies exact inference by enumeration in probabilistic programming
+languages: WebPPL explores every execution of a program by capturing a
+continuation at each random choice
+([Goodman & Stuhlmüller, 2014](http://dippl.org/chapters/03-enumeration.html)).
+The implementation uses a trie data structure that mirrors the branching structure of the
 program's random choices. Each node in the trie corresponds to a decision
 point, and its children correspond to the possible outcomes.
 
@@ -627,8 +631,12 @@ point. The workaround is to rerun the program from the start, forcing the
 choices along the path to that branch, and stop it there. That adds
 assumptions on top of the ones tracing already makes&mdash;rerunning must have
 no side effects, and the program must be safe to interrupt partway&mdash;and it
-costs a rerun for every node of the trie rather than one per trace. It's
-possible, but it's not something to bolt onto a tracer casually.
+costs a rerun for every node of the trie rather than one per trace.
+Probabilistic programming languages avoid the rerun by capturing a
+continuation at each choice point. WebPPL keeps them in a priority queue, which
+gives exactly this most-likely-first order
+([Goodman & Stuhlmüller, 2014](http://dippl.org/chapters/03-enumeration.html)).
+Without continuations, it's not something to bolt onto a tracer casually.
 
 ## Strategy 3: Testing the Whole Pipeline
 
