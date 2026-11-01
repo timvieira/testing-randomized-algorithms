@@ -1,9 +1,5 @@
 ## Open
 
-Accuracy
-- [ ] "Correlated but unbiased (e.g., MCMC)": MCMC isn't unbiased in general.
-- [ ] "V_eff > V" isn't guaranteed (negative autocorrelation can make it smaller).
-
 Before publishing
 - [ ] Remove the draft banner and set the date.
 
@@ -14,6 +10,9 @@ Optional
   same Var(Z-hat) on the toy model.
 
 ## Done
+
+- [x] Estimator classes: SWOR is correlated but unbiased (V_eff < V); MCMC
+  moves to biased but consistent.
 
 - [x] Make SMC estimate a nontrivial Z (AWRS as the SMC proposal under a
   token-level constraint, so Z = P(constraint) < 1).

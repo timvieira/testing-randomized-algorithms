@@ -294,13 +294,13 @@ make different predictions about how these terms behave:
   error, the slope is $-1/2$ and the intercept is $\frac{1}{2} \log
   V$.</footnote>
 
-- **Correlated but unbiased** (e.g., MCMC, Markov reward processes). The bias
-  is still zero, but autocorrelation inflates the variance:
-  $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2 \approx V_{\text{eff}} / M$
-  where $V_{\text{eff}} > V$ depends on the integrated autocorrelation time.
-  The rate is still $O(1/M)$, but the constant is larger.
+- **Correlated but unbiased** (e.g., sampling without replacement). The bias
+  is still zero, but the correlation changes the variance:
+  $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2 \approx V_{\text{eff}} / M$.
+  Samples drawn without replacement are negatively correlated, so here
+  $V_{\text{eff}} < V$. The rate is still $O(1/M)$, but the constant is smaller.
 
-- **Biased but consistent** (e.g., self-normalized importance sampling). The
+- **Biased but consistent** (e.g., self-normalized importance sampling, MCMC). The
   bias is $O(1/M)$, so the squared bias is $O(1/M^2)$. The variance is
   $O(1/M)$.
   The MSE is still $O(1/M)$ overall, so on a log&ndash;log plot the slope looks
@@ -355,9 +355,9 @@ indistinguishable from A's. That's not a coincidence, and we'll see why later.
 ### What a Single Run Can and Can't Tell Us
 
 Watching a single long run tells us the *rate* of convergence, but it can't
-distinguish the three cases above. An unbiased i.i.d. estimator, a correlated
-MCMC chain, and a self-normalized importance sampler can all produce very similar
-log&ndash;log plots&mdash;the slopes are the same and the constants differ in ways
+distinguish the three cases above. An unbiased i.i.d. estimator, an estimator
+built from samples drawn without replacement, and an MCMC chain can all produce
+very similar log&ndash;log plots&mdash;the slopes are the same and the constants differ in ways
 that are hard to eyeball.
 
 A pedagogical example: suppose we accidentally computed the average as
