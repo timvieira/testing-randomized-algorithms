@@ -545,6 +545,25 @@ single run catches it. C needs a few hundred, so it takes careful averaging. D
 needs about fifteen million, and no reasonable Monte Carlo test would ever see
 it. The tracer took a fraction of a second.
 
+### Comparing Variances
+
+The same moments let us compare estimators that are all correct. Unbiasedness
+is only half the story: AWRS exists because it has lower variance than simpler
+alternatives. The simplest properly weighted sampler draws once from $p$ and
+keeps the draw with weight 1 if it lands in $C$, or weight 0 otherwise. It is
+unbiased, so no correctness test can tell it apart from AWRS. The tracer can
+compare their variances exactly:
+
+{% notebook testing-randomized-algorithms.ipynb cells[7:8] %}
+
+Both are unbiased, but the naive weight has about 2.4 times the variance of the
+AWRS weight as an estimate of $Z$, so it needs about 2.4 times as many samples
+for the same accuracy. This turns a performance claim into a test. If a
+refactor leaves an estimator correct but noisier, an exact variance check
+catches it, with no line to fit through a noisy plot. The same goes for the
+SMC pipeline below: the tracer gives the exact variance of $\widehat{Z}$, so we
+can check whether a better proposal or more particles actually help.
+
 
 
 ## Strategy 3: Testing the Whole Pipeline
@@ -704,7 +723,7 @@ decoding*, which samples each token from the language model restricted to the
 allowed tokens and ignores the weight. It is the obvious way to do constrained
 generation.
 
-{% notebook testing-randomized-algorithms.ipynb cells[8:9] %}
+{% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
 
 Every bug is caught through the pipeline, including D. After a `b`, two of
 the four tokens are forbidden, so AWRS's first pass can reject twice in one
@@ -722,7 +741,7 @@ is the reason AWRS returns a weight in the first place.
 Resampling is just one more random choice, made through the same `draw` hook,
 so the tracer needs no changes. Two particles are enough to exercise it:
 
-{% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
+{% notebook testing-randomized-algorithms.ipynb cells[10:11] %}
 
 The correct implementation passes and D is still caught. But notice the
 number of traces: 162 with one particle, and nearly 30,000 with two.
