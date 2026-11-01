@@ -569,7 +569,7 @@ D's bug is in the `else` branch: it accumulates the *normalized* probability
 rejection, because `p_cond` still sums to one. They differ only when the first
 pass rejects two or more elements. With our long-tailed `p`, that happens in
 about one run in twenty, and even then the weight is off by only a couple of
-percent&mdash;which is why D's single run looked just like A's.
+percent<a href="https://github.com/timvieira/testing-randomized-algorithms/blob/master/tests/test_article.py#L85" title="test_d_differs_only_on_double_rejections" class="verified" target="_blank">✓</a>&mdash;which is why D's single run looked just like A's.
 
 ### How Many Samples Would Monte Carlo Need?
 
@@ -599,7 +599,7 @@ compare their variances exactly:
 
 Both are unbiased, but the naive weight has about 2.4 times the variance of the
 AWRS weight as an estimate of $Z$, so it needs about 2.4 times as many samples
-for the same accuracy. This turns a performance claim into a test. If a
+for the same accuracy.<a href="https://github.com/timvieira/testing-randomized-algorithms/blob/master/tests/test_article.py#L121" title="test_naive_sampler_has_more_variance" class="verified" target="_blank">✓</a> This turns a performance claim into a test. If a
 refactor leaves an estimator correct but noisier, an exact variance check
 catches it, with no line to fit through a noisy plot. The same goes for the
 SMC pipeline below: the tracer gives the exact variance of $\widehat{Z}$, so we
@@ -623,7 +623,7 @@ If we run every trace, the order doesn't matter: both give the same exact
 answer. It matters when we stop early. After exploring traces with total
 probability $c$, the unexplored traces have total probability $1 - c$, so if
 every weight is at most $B$, the answer can be off by at most $B(1 - c)$.
-(AWRS's weights are at most 1.) The bound holds for any order, and greedy
+(AWRS's weights are at most 1.<a href="https://github.com/timvieira/testing-randomized-algorithms/blob/master/tests/test_article.py#L131" title="test_awrs_weights_are_at_most_one" class="verified" target="_blank">✓</a>) The bound holds for any order, and greedy
 tightens it faster because it heads for the heaviest unexplored part of the
 trie:
 
@@ -818,7 +818,7 @@ step&mdash;exactly the situation that triggers D's bug.
 The last line is the most instructive one. Locally constrained decoding never
 produces an invalid string, but it gets the probabilities wrong: it
 over-represents strings whose prefixes leave little room under the constraint.
-Here, it puts too much mass on `b` and `ba`, because it never pays for the
+Here, it puts too much mass on `b` and `ba`<a href="https://github.com/timvieira/testing-randomized-algorithms/blob/master/tests/test_article.py#L163" title="test_locally_constrained_overweights_b" class="verified" target="_blank">✓</a>, because it never pays for the
 probability that `b` would have been followed by a forbidden token. This bias
 is the reason AWRS returns a weight in the first place.
 
@@ -830,7 +830,7 @@ so the tracer needs no changes. Two particles are enough to exercise it:
 {% notebook testing-randomized-algorithms.ipynb cells[12:13] %}
 
 The correct implementation passes and D is still caught. But notice the
-number of traces: 162 with one particle, and nearly 30,000 with two.
+number of traces: 162 with one particle, and nearly 30,000 with two.<a href="https://github.com/timvieira/testing-randomized-algorithms/blob/master/tests/test_article.py#L175" title="test_sir_with_two_particles" class="verified" target="_blank">✓</a>
 
 **Pro tip:** Make sure the total mass decreases quickly, as the loop will halt
 only when the total mass is zero. This requires the support to be finite. For

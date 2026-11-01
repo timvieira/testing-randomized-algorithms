@@ -179,3 +179,16 @@ def test_sir_with_two_particles(nb):
     assert 25_000 < n_traces < 31_000
     status, _, _ = nb['check_smc'](nb['variants']['D'], M=2, tau=0.75)
     assert status == '✗'
+
+
+# ---------------------------------------------------------------------------
+# The article's ✓ links
+# ---------------------------------------------------------------------------
+
+def test_check_marks_point_to_their_tests():
+    """Each ✓ in the article links to the line where its test is defined."""
+    pills = re.findall(r'<a href="[^"]*/tests/test_article\.py#L(\d+)" title="(\w+)" class="verified"', ARTICLE)
+    assert len(pills) == 5
+    lines = Path(__file__).read_text().splitlines()
+    for lineno, name in pills:
+        assert lines[int(lineno) - 1].startswith(f'def {name}('), name
