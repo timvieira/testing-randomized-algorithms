@@ -41,7 +41,6 @@
       <label>Order <select class="tr-order">
         <option value="sampling">sampling</option>
         <option value="greedy">greedy</option>
-        <option value="best-first">best-first</option>
       </select></label>
       <span class="tr-buttons">
         <button class="tr-step">Next trace</button>

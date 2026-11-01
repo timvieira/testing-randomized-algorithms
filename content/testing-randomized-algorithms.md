@@ -585,82 +585,45 @@ can check whether a better proposal or more particles actually help.
 ### Which Trace Next?
 
 `TraceSWOR` makes each choice at random, in proportion to the unexplored mass
-below it. That is one of several reasonable orders. Two deterministic
-alternatives:
-
-- **Greedy:** always descend into the child with the most unexplored mass. This
-  is a one-method subclass.
-- **Best-first:** always run the most probable unexplored trace next. This is a
-  uniform-cost search over prefixes of choices, kept in a priority queue. Each
-  run replays a prefix and stops at the next choice point.
-
-<details class="derivation" markdown="1">
-<summary>Greedy and best-first</summary>
+below it. That isn't the only reasonable order. A deterministic alternative is
+**greedy**: always descend into the child with the most unexplored mass. It's a
+one-method subclass:
 
 ```python
-import heapq
-
 class TraceGreedy(TraceSWOR):
-    """Always descend into the child with the most remaining mass."""
+    """Always descend into the child with the most unexplored mass."""
     def choose(self, node):
         return int(np.argmax(node.child_masses))
-
-class _Stop(Exception):
-    pass
-
-def best_first(program):
-    """Run program(draw) once per trace, most probable trace first.
-
-    Yields (probability, output) pairs. This is uniform-cost search over
-    prefixes of choices: each run replays a prefix, pushes the extensions
-    of that prefix onto a priority queue, and stops at the next choice
-    point, unless the program finishes first.
-    """
-    queue = [(-1.0, ())]
-    while queue:
-        neg_mass, prefix = heapq.heappop(queue)
-        t = 0
-        def draw(p, context=None):
-            nonlocal t
-            if isinstance(p, dict):
-                keys = list(p.keys())
-                vals = np.array([p[k] for k in keys], dtype=float)
-            else:
-                vals = np.asarray(p, dtype=float)
-                keys = list(range(len(vals)))
-            vals = vals / vals.sum()
-            if t < len(prefix):
-                t += 1
-                return keys[prefix[t - 1]]
-            for a, v in enumerate(vals):
-                if v > 0:
-                    heapq.heappush(queue, (neg_mass * v, prefix + (a,)))
-            raise _Stop
-        try:
-            output = program(draw)
-        except _Stop:
-            continue
-        yield -neg_mass, output
 ```
 
-</details>
-
-If we run every trace, the order doesn't matter: all three give the same exact
+If we run every trace, the order doesn't matter: both give the same exact
 answer. It matters when we stop early. After exploring traces with total
 probability $c$, the unexplored traces have total probability $1 - c$, so if
 every weight is at most $B$, the answer can be off by at most $B(1 - c)$.
-(AWRS's weights are at most 1.) The bound holds for any order, but best-first
-makes it shrink fastest, because no other order covers more mass with the same
-number of traces:
+(AWRS's weights are at most 1.) The bound holds for any order, and greedy
+tightens it faster because it heads for the heaviest unexplored part of the
+trie:
 
 {% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
 
-Sampling covers mass more slowly, but it offers something the deterministic
-orders don't. The traces it has seen are a sample without replacement, which
-supports an unbiased estimate of the part it hasn't seen
+Sampling covers mass more slowly, but it offers something greedy doesn't. The
+traces it has seen are a sample without replacement, which supports an unbiased
+estimate of the part it hasn't seen
 ([Shi et al., 2020](https://arxiv.org/abs/2002.09067)). A deterministic order
 gives a guaranteed bound on the error; sampling gives an unbiased estimate. The
-replay above can run in all three orders.
+replay above can run in either order.
+
+Why not go further, and always run the most probable unexplored trace next?
+Greedy heads for the heaviest subtree, not the heaviest single trace, so it
+isn't that. True best-first search
+needs to resume the program at an arbitrary unexplored branch, and the tracer
+can't: it remembers probabilities, not the program's state at each choice
+point. The workaround is to rerun the program from the start, forcing the
+choices along the path to that branch, and stop it there. That adds
+assumptions on top of the ones tracing already makes&mdash;rerunning must have
+no side effects, and the program must be safe to interrupt partway&mdash;and it
+costs a rerun for every node of the trie rather than one per trace. It's
+possible, but it's not something to bolt onto a tracer casually.
 
 ## Strategy 3: Testing the Whole Pipeline
 

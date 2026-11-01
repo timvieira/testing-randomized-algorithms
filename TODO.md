@@ -24,5 +24,6 @@ Optional
 - [x] Reorder the AWRS variants so each testing strategy catches one more bug.
 - [x] Remove duplicated code from rendered notebook cells.
 - [x] Exact variance comparison (AWRS vs. naive).
-- [x] Exploration orders: sampling, greedy, best-first.
+- [x] Exploration orders: sampling and greedy, with a note on why true best-first
+  needs replay and is fragile.
 - [x] Interactive trace replay (D3), limitations section, takeaways recap.
