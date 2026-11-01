@@ -6,10 +6,14 @@ Before publishing
 Optional
 - [ ] Extract the tracing function into a small library (`tracing.py`) with tests.
   Should be pip-installable. Add `pyproject.toml`, `test_tracing.py`.
-- [ ] Explain (or leave out) why SIS and SIR with 2 particles have exactly the
-  same Var(Z-hat) on the toy model.
 
 ## Done
+
+- [x] Investigated why SIS and SIR (2 particles) have identical Var(Z-hat): in
+  the toy model, resampling only fires right before a deterministic final EOS
+  step, and it preserves total weight, so Z-hat is unchanged on every run. A
+  uniform-resampling bug passes a Z check but fails the per-string check.
+  Decided to leave it out of the article (too much content).
 
 - [x] Estimator classes: SWOR is correlated but unbiased (V_eff < V); MCMC
   moves to biased but consistent.
