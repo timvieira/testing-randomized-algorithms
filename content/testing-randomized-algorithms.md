@@ -295,10 +295,9 @@ make different predictions about how these terms behave:
   V$.</footnote>
 
 - **Correlated but unbiased** (e.g., sampling without replacement). The bias
-  is still zero, but the correlation changes the variance:
-  $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2 \approx V_{\text{eff}} / M$.
-  Samples drawn without replacement are negatively correlated, so here
-  $V_{\text{eff}} < V$. The rate is still $O(1/M)$, but the constant is smaller.
+  is still zero. Samples drawn without replacement are negatively correlated,
+  which shrinks the variance: the rate is still $O(1/M)$, but the constant is
+  smaller.
 
 - **Biased but consistent** (e.g., self-normalized importance sampling, MCMC). The
   bias is $O(1/M)$, so the squared bias is $O(1/M^2)$. The variance is
@@ -410,8 +409,7 @@ D, on the other hand, has now passed every test we've thrown at it.
 
 But Monte Carlo testing is still a *blunt instrument*. Small biases hide
 easily in the noise, and you need many runs to have any statistical power. For
-correlated estimators, the effective variance $V_{\text{eff}}$ may be hard to
-compute, making the theoretical line itself uncertain. In software&mdash;unlike
+correlated estimators, the effective variance may be hard to compute, making the theoretical line itself uncertain. In software&mdash;unlike
 the real world&mdash;we can almost always do better.
 
 ## Strategy 2: Program Tracing

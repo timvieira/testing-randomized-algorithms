@@ -371,10 +371,9 @@ make different predictions about how these terms behave:</p>
 </li>
 <li>
 <p><strong>Correlated but unbiased</strong> (e.g., sampling without replacement). The bias
-  is still zero, but the correlation changes the variance:
-  $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2 \approx V_{\text{eff}} / M$.
-  Samples drawn without replacement are negatively correlated, so here
-  $V_{\text{eff}} < V$. The rate is still $O(1/M)$, but the constant is smaller.</p>
+  is still zero. Samples drawn without replacement are negatively correlated,
+  which shrinks the variance: the rate is still $O(1/M)$, but the constant is
+  smaller.</p>
 </li>
 <li>
 <p><strong>Biased but consistent</strong> (e.g., self-normalized importance sampling, MCMC). The
@@ -554,8 +553,7 @@ confidence band. <strong>C is out.</strong></p>
 <p>D, on the other hand, has now passed every test we've thrown at it.</p>
 <p>But Monte Carlo testing is still a <em>blunt instrument</em>. Small biases hide
 easily in the noise, and you need many runs to have any statistical power. For
-correlated estimators, the effective variance $V_{\text{eff}}$ may be hard to
-compute, making the theoretical line itself uncertain. In software&mdash;unlike
+correlated estimators, the effective variance may be hard to compute, making the theoretical line itself uncertain. In software&mdash;unlike
 the real world&mdash;we can almost always do better.</p>
 <h2 id="strategy-2-program-tracing">Strategy 2: Program Tracing</h2>
 <p>Here's the key insight: if the state space is small enough, we can <em>enumerate
