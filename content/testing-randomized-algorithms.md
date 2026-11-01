@@ -23,6 +23,16 @@ tags: testing, sampling, algorithms, monte-carlo, program-tracing
 *::-webkit-scrollbar-thumb:hover {
     background: #aaa;
 }
+/* Let wide equations scroll on their own instead of widening the page */
+mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+}
+/* Keep MathJax's hidden screen-reader copy from widening the page */
+mjx-assistive-mml {
+    right: 0 !important;
+}
 </style>
 
 <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 1.5em; border-radius: 4px; font-size: 0.95em;">
@@ -273,8 +283,8 @@ make different predictions about how these terms behave:
 
 - **I.I.D. unbiased** (e.g., our AWRS test). The bias is zero for all $M$.
   The variance is $V/M$ where $V = \text{tr}(\text{Cov}(X))$&mdash;the sum of
-  the componentwise variances of a single sample. So $\mathop{\mathbb{E}} \|
-  \widehat{\mu}^{(M)} - \mu \|^2 = V/M$.<footnote>If you prefer root mean squared
+  the componentwise variances of a single sample. So the mean squared error is
+  exactly $V/M$.<footnote>If you prefer root mean squared
   error, the slope is $-1/2$ and the intercept is $\frac{1}{2} \log
   V$.</footnote>
 
@@ -285,8 +295,8 @@ make different predictions about how these terms behave:
   The rate is still $O(1/M)$, but the constant is larger.
 
 - **Biased but consistent** (e.g., self-normalized importance sampling). The
-  bias is $O(1/M)$, so $\| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 =
-  O(1/M^2)$. The variance is $O(1/M)$.
+  bias is $O(1/M)$, so the squared bias is $O(1/M^2)$. The variance is
+  $O(1/M)$.
   The MSE is still $O(1/M)$ overall, so on a log&ndash;log plot the slope looks
   the same&mdash;the bias hides in the noise at large $M$.
 
@@ -322,7 +332,7 @@ A note on reading this plot: when we say "log&ndash;log scale" we mean the axes 
 log-transformed but the tick labels show the original values (e.g., $10^2$,
 $10^3$). This is what `plt.xscale('log')` does. This is different from
 *literally plotting* $\log y$ vs $\log x$, where the axes are linear but the
-values are logs. The line-fitting code does the latter ($\texttt{np.polyfit}$ on
+values are logs. The line-fitting code does the latter (`np.polyfit` on
 $\log x$, $\log y$), but for visual inspection, log-scaled axes are usually
 clearer because you can read off the original quantities directly.
 
@@ -360,9 +370,14 @@ To separate bias from variance, we need **multiple independent runs**. The idea:
 run the estimator many times at each sample size $M$, and compare the *average*
 behavior to the theoretical prediction.
 
-Recall the decomposition from earlier: $\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} -
-\mu \|^2 = \| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 +
-\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] \|^2$.
+Recall the decomposition from earlier:
+
+$$
+\mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mu \|^2
+= \| \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2
++ \mathop{\mathbb{E}} \| \widehat{\mu}^{(M)} - \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] \|^2
+$$
+
 For the i.i.d. unbiased case, the variance term is $V/M$. So:
 
 - If the observed MSE matches $V/M$, the squared bias must be near
@@ -371,8 +386,8 @@ For the i.i.d. unbiased case, the variance term is $V/M$. So:
   \mu \|^2$ does not vanish with $M$. At large $M$, the variance $V/M$ shrinks
   but the bias dominates, causing the observed curve to *flatten out* above the
   theoretical line.
-- For biased-but-consistent estimators (like self-normalized IS), $\|
-  \mathop{\mathbb{E}}[\widehat{\mu}^{(M)}] - \mu \|^2 = O(1/M^2)$&mdash;it vanishes
+- For biased-but-consistent estimators (like self-normalized IS), the squared
+  bias is $O(1/M^2)$&mdash;it vanishes
   faster than the variance. This means the MSE curve will *eventually* match
   $V/M$, but may sit slightly above it for small $M$.
 
@@ -573,7 +588,7 @@ alone.
 
 Why should this hold? Proper weighting composes. At step $t$, AWRS returns a
 token and a weight that are properly weighted for $p(\cdot \mid
-\mathbf{x}_{<t})$ restricted to the allowed tokens. Multiplying these weights
+\mathbf{x}_{\lt t})$ restricted to the allowed tokens. Multiplying these weights
 along a string gives a properly weighted sample for the product of the
 per-step targets, which is $\gamma$. Resampling preserves proper weighting as
 long as every resampled particle carries the average weight.
@@ -601,7 +616,7 @@ Z_lm = sum(target_lm.values())  # = 0.65, not 1
 ```
 
 <details class="derivation" markdown="1">
-<summary>Utilities: <code>SimpleLM</code>, <code>is_valid</code></summary>
+<summary><span>Utilities: <code>SimpleLM</code>, <code>is_valid</code></span></summary>
 
 ```python
 EOS = '<EOS>'  # end-of-sequence marker
