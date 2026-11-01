@@ -1,5 +1,5 @@
 title: Ideas for Testing Randomized Algorithms
-date: 2026-04-02
+date: 2026-11-01
 comments: true
 tags: testing, sampling, algorithms, monte-carlo, program-tracing
 
