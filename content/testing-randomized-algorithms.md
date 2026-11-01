@@ -228,6 +228,10 @@ $$
 The right-hand side is the unnormalized target&mdash;$p$ restricted to the
 condition $C$, with normalizing constant $Z = \sum_{x \in C} p(x)$.
 
+That AWRS satisfies this is a theorem in
+[Lipkin et al., 2025](https://arxiv.org/abs/2504.05410), and we'll take it as
+given. Our question is whether the code does what the paper proves.
+
 Note that you may often need to tweak definitions, narrow or broaden the scope
 of theory in order to suit your code's intended use cases. This is an important
 skill for turning theory into tests.
@@ -484,7 +488,7 @@ class Tracer:
             cur.child_masses = cur.mass * vals
             cur.context = context
 
-        a = cur.sample()
+        a = self.choose(cur)
         if a not in cur.active_children:
             cur.active_children[a] = Node(
                 idx=a, mass=cur.child_masses[a], parent=cur,
@@ -492,6 +496,10 @@ class Tracer:
             )
         self.cur = cur.active_children[a]
         return keys[a]
+
+    def choose(self, node):
+        """Pick which child to explore next."""
+        return node.sample()
 
 
 class TraceSWOR(Tracer):
@@ -511,6 +519,16 @@ class TraceSWOR(Tracer):
 ```
 
 </details>
+
+Here is the tracer at work on variant A with our test case. Each step runs the
+program once more and adds one trace to the trie. Node colors mark which pass of
+AWRS made the choice, and a node fades as the probability mass below it is
+explored. The order menu is explained [below](#which-trace-next).
+
+<div id="trace-replay"></div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="../widgets/trace-data.js"></script>
+<script src="../widgets/trace-replay.js"></script>
 
 ### Exact Verification
 
@@ -564,7 +582,85 @@ catches it, with no line to fit through a noisy plot. The same goes for the
 SMC pipeline below: the tracer gives the exact variance of $\widehat{Z}$, so we
 can check whether a better proposal or more particles actually help.
 
+### Which Trace Next?
 
+`TraceSWOR` makes each choice at random, in proportion to the unexplored mass
+below it. That is one of several reasonable orders. Two deterministic
+alternatives:
+
+- **Greedy:** always descend into the child with the most unexplored mass. This
+  is a one-method subclass.
+- **Best-first:** always run the most probable unexplored trace next. This is a
+  uniform-cost search over prefixes of choices, kept in a priority queue. Each
+  run replays a prefix and stops at the next choice point.
+
+<details class="derivation" markdown="1">
+<summary>Greedy and best-first</summary>
+
+```python
+import heapq
+
+class TraceGreedy(TraceSWOR):
+    """Always descend into the child with the most remaining mass."""
+    def choose(self, node):
+        return int(np.argmax(node.child_masses))
+
+class _Stop(Exception):
+    pass
+
+def best_first(program):
+    """Run program(draw) once per trace, most probable trace first.
+
+    Yields (probability, output) pairs. This is uniform-cost search over
+    prefixes of choices: each run replays a prefix, pushes the extensions
+    of that prefix onto a priority queue, and stops at the next choice
+    point, unless the program finishes first.
+    """
+    queue = [(-1.0, ())]
+    while queue:
+        neg_mass, prefix = heapq.heappop(queue)
+        t = 0
+        def draw(p, context=None):
+            nonlocal t
+            if isinstance(p, dict):
+                keys = list(p.keys())
+                vals = np.array([p[k] for k in keys], dtype=float)
+            else:
+                vals = np.asarray(p, dtype=float)
+                keys = list(range(len(vals)))
+            vals = vals / vals.sum()
+            if t < len(prefix):
+                t += 1
+                return keys[prefix[t - 1]]
+            for a, v in enumerate(vals):
+                if v > 0:
+                    heapq.heappush(queue, (neg_mass * v, prefix + (a,)))
+            raise _Stop
+        try:
+            output = program(draw)
+        except _Stop:
+            continue
+        yield -neg_mass, output
+```
+
+</details>
+
+If we run every trace, the order doesn't matter: all three give the same exact
+answer. It matters when we stop early. After exploring traces with total
+probability $c$, the unexplored traces have total probability $1 - c$, so if
+every weight is at most $B$, the answer can be off by at most $B(1 - c)$.
+(AWRS's weights are at most 1.) The bound holds for any order, but best-first
+makes it shrink fastest, because no other order covers more mass with the same
+number of traces:
+
+{% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
+
+Sampling covers mass more slowly, but it offers something the deterministic
+orders don't. The traces it has seen are a sample without replacement, which
+supports an unbiased estimate of the part it hasn't seen
+([Shi et al., 2020](https://arxiv.org/abs/2002.09067)). A deterministic order
+gives a guaranteed bound on the error; sampling gives an unbiased estimate. The
+replay above can run in all three orders.
 
 ## Strategy 3: Testing the Whole Pipeline
 
@@ -723,7 +819,7 @@ decoding*, which samples each token from the language model restricted to the
 allowed tokens and ignores the weight. It is the obvious way to do constrained
 generation.
 
-{% notebook testing-randomized-algorithms.ipynb cells[9:10] %}
+{% notebook testing-randomized-algorithms.ipynb cells[11:12] %}
 
 Every bug is caught through the pipeline, including D. After a `b`, two of
 the four tokens are forbidden, so AWRS's first pass can reject twice in one
@@ -741,7 +837,7 @@ is the reason AWRS returns a weight in the first place.
 Resampling is just one more random choice, made through the same `draw` hook,
 so the tracer needs no changes. Two particles are enough to exercise it:
 
-{% notebook testing-randomized-algorithms.ipynb cells[10:11] %}
+{% notebook testing-randomized-algorithms.ipynb cells[12:13] %}
 
 The correct implementation passes and D is still caught. But notice the
 number of traces: 162 with one particle, and nearly 30,000 with two.
@@ -749,11 +845,53 @@ number of traces: 162 with one particle, and nearly 30,000 with two.
 **Pro tip:** Make sure the total mass decreases quickly, as the loop will halt
 only when the total mass is zero. This requires the support to be finite. For
 problems where the support is large but finite, it may be a reasonable heuristic
-to stop early if the remaining mass is small, trading exactness for an unbiased
-*estimate* (via techniques from [Shi et al., 2020](https://arxiv.org/abs/2002.09067)).<footnote>Traces are a combinatorial space, so this strategy is only practical for smaller problems. But "smaller problems" is exactly the regime where tests should live&mdash;small enough to verify exactly, but complex enough to exercise the algorithm's logic.</footnote>
+to stop early if the remaining mass is small, trading exactness for a bound or
+an unbiased estimate (see [Which Trace Next?](#which-trace-next)).<footnote>Traces are a combinatorial space, so this strategy is only practical for smaller problems. But "smaller problems" is exactly the regime where tests should live&mdash;small enough to verify exactly, but complex enough to exercise the algorithm's logic.</footnote>
 
 
-## Some Miscellaneous Thoughts
+## Limitations
+
+Program tracing is not a universal tool. It asks a few things of the program
+under test:
+
+- **Discrete, finite randomness.** Every random choice must have finitely many
+  outcomes, and every execution must terminate. A Gaussian draw, or a loop that
+  can run forever (rejection sampling *with* replacement, say), has infinitely
+  many traces, and the tracer never finishes. Sometimes you can test a discrete
+  skeleton of the algorithm, or discretize the continuous part; otherwise you
+  are back to Monte Carlo.
+
+- **All randomness goes through the hook.** The program must be a
+  deterministic function of the values `draw` returns. A stray call to the
+  global RNG, iteration over an unordered set, or a race between threads breaks
+  that assumption, and the results are meaningless.
+
+- **Small instances only.** The number of traces grows combinatorially: one
+  particle gave 162 traces, and two gave nearly 30,000. Tests have to live on
+  toy instances, so bugs that only appear at scale&mdash;underflow in long
+  sequences, a code path that only large vocabularies reach&mdash;need other
+  tests.
+
+- **Only as good as the specification.** The tracer checks the property you
+  wrote down. If the target is wrong, or the property is too weak (checking
+  only $Z$ when $Z = 1$, for instance), it will confirm the wrong thing with
+  perfect confidence.
+
+- **Exact up to floating point.** Comparisons still need a tolerance, so a bug
+  confined to traces whose total probability is below that tolerance goes
+  unnoticed.
+
+## Takeaways
+
+We climbed a ladder of tests, and each rung caught a bug that the one below it
+missed:
+
+| Test | What it caught | Cost |
+|---|---|---|
+| One run, watching the error fall | B: large bias, visible after ~50 samples | one run |
+| Many runs, compared to $V/M$ | C: small bias, visible after ~400 samples | a thousand runs |
+| Program tracing | D: tiny bias, visible after ~15 million samples | one run per trace (196) |
+| Tracing the whole SMC pipeline | bugs in how the pieces fit, like dropping the AWRS weight | one run per trace (162) |
 
 Testing is fundamentally about **control**. Some abstractions give us more
 control over a system's behavior than others, and good tests depend on choosing
