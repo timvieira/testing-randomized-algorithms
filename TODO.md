@@ -1,9 +1,11 @@
 ## Open
 
 Before publishing
-- [ ] Remove the draft banner and set the date.
+- [ ] Set the publication date.
 
 ## Done
+
+- [x] Removed the draft banner.
 
 - [x] `program_tracing` library in this repo (mirrors conditional-poisson-sampling):
   tests for the library and for the article's claims, ruff, coverage, CI, Makefile.
