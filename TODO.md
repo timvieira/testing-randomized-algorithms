@@ -3,20 +3,15 @@
 Accuracy
 - [ ] "Correlated but unbiased (e.g., MCMC)": MCMC isn't unbiased in general.
 - [ ] "V_eff > V" isn't guaranteed (negative autocorrelation can make it smaller).
-- [ ] Check that Shi et al. (2020) is the right citation for unbiased estimates
-  from early-stopped sampling without replacement; Kool et al. (2019) may fit better.
 
-Polish
-- [ ] Plots now use Plotly; consider moving the plotting code into hidden helper
-  cells so the visible cells are short.
-- [ ] Align notation with the paper's pseudocode (text uses x* and psi; image uses
-  x_c and psi_0).
-- [ ] CLAUDE.md says GitHub Pages serves from `main`; the branch is `master`.
-- [ ] Before publishing: remove the draft banner and set the date.
+Before publishing
+- [ ] Remove the draft banner and set the date.
 
 Optional
 - [ ] Extract the tracing function into a small library (`tracing.py`) with tests.
   Should be pip-installable. Add `pyproject.toml`, `test_tracing.py`.
+- [ ] Explain (or leave out) why SIS and SIR with 2 particles have exactly the
+  same Var(Z-hat) on the toy model.
 
 ## Done
 
@@ -28,3 +23,7 @@ Optional
 - [x] Exploration orders: sampling and greedy, with a note on why true best-first
   needs replay and is fragile.
 - [x] Interactive trace replay (D3), limitations section, takeaways recap.
+- [x] Plots in Plotly, with plotting code in hidden helpers.
+- [x] Credit Shi et al. (2020) for the tracing strategy.
+- [x] Match the prose's notation to the paper's pseudocode (x_c, psi_0).
+- [x] CLAUDE.md: Pages serves from `master`; math is MathJax.

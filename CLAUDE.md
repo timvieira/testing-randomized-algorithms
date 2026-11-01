@@ -4,7 +4,7 @@ Blog post about ideas for testing randomized algorithms—program tracing, impor
 
 ## Project structure
 
-- `content/testing-randomized-algorithms.md` — main article (Markdown with YAML front matter, inline `<style>`, KaTeX math)
+- `content/testing-randomized-algorithms.md` — main article (Markdown with YAML front matter, inline `<style>`, MathJax math)
 - `content/testing-randomized-algorithms.ipynb` — Jupyter notebook; cells are pulled into the article via `{% notebook %}` directives
 - `content/images/` — figures referenced by the article
 - `blog.toml` — blog build config (`static = ["images"]`)
@@ -23,7 +23,7 @@ blog deploy       # build to docs/, commit, and push
 
 ## Deployment
 
-- GitHub Pages serves from `docs/` on `main` branch (satellite mode — article is the root index).
+- GitHub Pages serves from `docs/` on the `master` branch (satellite mode — article is the root index).
 - Site URL: `https://timvieira.github.io/testing-randomized-algorithms/`
 - `blog deploy` handles the full build-commit-push cycle.
 
@@ -32,5 +32,5 @@ blog deploy       # build to docs/, commit, and push
 - **Font**: EB Garamond (loaded from the blog's `blog.css`).
 - **Writing**: Understated tone, no dorky capitalization, no cliche quotes. American English.
 - **Punctuation**: Tight em-dashes (word—word), not spaced en-dashes.
-- **Math**: KaTeX with `$...$` (inline) and `$$...$$` (display). Use `\widehat{}` not `\hat{}`. Use `^\top` not `^T`.
+- **Math**: MathJax with `$...$` (inline) and `$$...$$` (display). Use `\widehat{}` not `\hat{}`. Use `^\top` not `^T`.
 - **TODO tracking**: Update `TODO.md` after completing each task.

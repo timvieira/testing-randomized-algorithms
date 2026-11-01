@@ -72,9 +72,9 @@ The following algorithm, which we call AWRS (from [Lipkin et al., 2025](https://
 ![AWRS algorithm pseudocode](../images/awrs-algorithm.png)
 
 The idea: run rejection sampling twice. The first pass finds a conditioned
-sample $x^*$ while tracking the total rejected probability mass $\psi$. The
+sample $x_c$ while tracking the total rejected probability mass $\psi_0$. The
 second pass generates additional rejections to get a count $n$. The weight
-$(1 - \psi) / (n + 1)$ combines these two signals&mdash;the rejected mass and
+$(1 - \psi_0) / (n + 1)$ combines these two signals&mdash;the rejected mass and
 the rejection count&mdash;into an unbiased estimate of the normalizing constant
 $Z$. The number of rejections before finding a valid token contains signal about
 the magnitude of $Z$, and weighting by the actual probability mass removed
@@ -426,9 +426,12 @@ probability, and combine all traces to compute the exact output distribution.
 
 ### The Tracer
 
-The implementation uses a trie data structure that mirrors the branching
-structure of the program's random choices. Each node in the trie corresponds to
-a decision point, and its children correspond to the possible outcomes.
+The tracing strategy comes from
+[Shi et al., 2020](https://arxiv.org/abs/2002.09067), who use it to sample
+without replacement from programs such as sequence models. The implementation
+uses a trie data structure that mirrors the branching structure of the
+program's random choices. Each node in the trie corresponds to a decision
+point, and its children correspond to the possible outcomes.
 
 The beautiful thing about `TraceSWOR` is that it works as a context manager:
 each `with tracer:` block explores one trace, and when it exits, that trace's
