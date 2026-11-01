@@ -7,7 +7,8 @@ Accuracy
   from early-stopped sampling without replacement; Kool et al. (2019) may fit better.
 
 Polish
-- [ ] Move matplotlib boilerplate into hidden helper cells so plot cells are short.
+- [ ] Plots now use Plotly; consider moving the plotting code into hidden helper
+  cells so the visible cells are short.
 - [ ] Align notation with the paper's pseudocode (text uses x* and psi; image uses
   x_c and psi_0).
 - [ ] CLAUDE.md says GitHub Pages serves from `main`; the branch is `master`.

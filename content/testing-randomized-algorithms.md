@@ -35,6 +35,8 @@ mjx-assistive-mml {
 }
 </style>
 
+<script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
+
 <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin-bottom: 1.5em; border-radius: 4px; font-size: 0.95em;">
 <b>Draft</b> — This article is a work in progress. Content may change.
 </div>
@@ -334,7 +336,7 @@ becomes $1/M$ times an autocorrelation correction.
 
 A note on reading this plot: when we say "log&ndash;log scale" we mean the axes are
 log-transformed but the tick labels show the original values (e.g., $10^2$,
-$10^3$). This is what `plt.xscale('log')` does. This is different from
+$10^3$). This is what a log axis does in a plotting library. This is different from
 *literally plotting* $\log y$ vs $\log x$, where the axes are linear but the
 values are logs. The line-fitting code does the latter (`np.polyfit` on
 $\log x$, $\log y$), but for visual inspection, log-scaled axes are usually
