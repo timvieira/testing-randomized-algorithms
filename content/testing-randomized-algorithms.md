@@ -920,3 +920,15 @@ Of course, some behaviors are only visible from "1,000 feet"&mdash;via integrati
 tests, stress tests, or long-horizon statistical checks. Not everything can be
 checked with a microscope. But the more control you have over the randomness in
 your program, the more you can check exactly rather than approximately.
+
+**How this post was made.** This post was written with extensive help from
+[Claude Code](https://claude.ai/claude-code). The ideas, the framing, and the
+final editorial decisions are mine.
+
+Every numerical claim in the post (which variants pass, the sample sizes, the
+variance ratio, the trace counts) is checked by a test in the repository, and
+the code shown here is the code those tests run. Mistakes are mine.
+
+Found an error or have a suggestion? Please
+[open an issue](https://github.com/timvieira/testing-randomized-algorithms/issues)
+on GitHub.
