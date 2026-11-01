@@ -15,7 +15,6 @@ Blog post about ideas for testing randomized algorithms—program tracing, impor
 - `Makefile` — `make test`, `lint`, `coverage`, `notebook`, `dev`, `deploy`, `install`
 - `.github/workflows/tests.yml` — CI: ruff, pytest with coverage, and a full run of the notebook
 - `docs/` — built output served by GitHub Pages (do not edit directly)
-- `TODO.md` — task tracking
 
 ## Build system
 
@@ -48,4 +47,3 @@ Every claim the article makes about results (which variants pass, M* values, var
 - **Writing**: Understated tone, no dorky capitalization, no cliche quotes. American English.
 - **Punctuation**: Tight em-dashes (word—word), not spaced en-dashes.
 - **Math**: MathJax with `$...$` (inline) and `$$...$$` (display). Use `\widehat{}` not `\hat{}`. Use `^\top` not `^T`.
-- **TODO tracking**: Update `TODO.md` after completing each task.
