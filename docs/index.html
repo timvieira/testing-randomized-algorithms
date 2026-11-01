@@ -801,6 +801,60 @@ Variant D: bias^2 = 1.7e-08, V = 0.24, M* = 14,544,122
 single run catches it. C needs a few hundred, so it takes careful averaging. D
 needs about fifteen million, and no reasonable Monte Carlo test would ever see
 it. The tracer took a fraction of a second.</p>
+<h3 id="comparing-variances">Comparing Variances</h3>
+<p>The same moments let us compare estimators that are all correct. Unbiasedness
+is only half the story: AWRS exists because it has lower variance than simpler
+alternatives. The simplest properly weighted sampler draws once from $p$ and
+keeps the draw with weight 1 if it lands in $C$, or weight 0 otherwise. It is
+unbiased, so no correctness test can tell it apart from AWRS. The tracer can
+compare their variances exactly:</p>
+
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="cm-editor cm-s-jupyter">
+<div class="highlight hl-ipython3"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">naive</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">cond</span><span class="p">,</span> <span class="n">draw</span><span class="o">=</span><span class="n">sample_categorical</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Draw once from p; weight 1 if the draw satisfies the condition, else 0."""</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">draw</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">cond</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">sampler</span> <span class="ow">in</span> <span class="p">[(</span><span class="s1">'AWRS'</span><span class="p">,</span> <span class="n">awrs_a</span><span class="p">),</span> <span class="p">(</span><span class="s1">'naive'</span><span class="p">,</span> <span class="n">naive</span><span class="p">)]:</span>
+    <span class="n">m1</span><span class="p">,</span> <span class="n">m2</span> <span class="o">=</span> <span class="n">exact_moments</span><span class="p">(</span><span class="n">sampler</span><span class="p">)</span>
+    <span class="n">bias2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">m1</span> <span class="o">-</span> <span class="n">target</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">V</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">m2</span> <span class="o">-</span> <span class="n">m1</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">var_w</span> <span class="o">=</span> <span class="n">m2</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">-</span> <span class="n">m1</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">**</span><span class="mi">2</span>   <span class="c1"># variance of w as an estimate of Z</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s1">&gt;5</span><span class="si">}</span><span class="s1">: bias^2 = </span><span class="si">{</span><span class="n">bias2</span><span class="si">:</span><span class="s1">.1e</span><span class="si">}</span><span class="s1">, V = </span><span class="si">{</span><span class="n">V</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">, Var(w) = </span><span class="si">{</span><span class="n">var_w</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre> AWRS: bias^2 = 6.5e-32, V = 0.244, Var(w) = 0.094
+naive: bias^2 = 0.0e+00, V = 0.378, Var(w) = 0.227
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<p>Both are unbiased, but the naive weight has about 2.4 times the variance of the
+AWRS weight as an estimate of $Z$, so it needs about 2.4 times as many samples
+for the same accuracy. This turns a performance claim into a test. If a
+refactor leaves an estimator correct but noisier, an exact variance check
+catches it, with no line to fit through a noisy plot. The same goes for the
+SMC pipeline below: the tracer gives the exact variance of $\widehat{Z}$, so we
+can check whether a better proposal or more particles actually help.</p>
 <h2 id="strategy-3-testing-the-whole-pipeline">Strategy 3: Testing the Whole Pipeline</h2>
 <p>AWRS is not meant to be used on its own. In <a href="https://arxiv.org/abs/2504.05410">Lipkin et al., 2025</a>,
 it is the proposal step inside sequential Monte Carlo for generating text from
@@ -1031,7 +1085,7 @@ so the tracer needs no changes. Two particles are enough to exercise it:</p>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child">
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>SIR with A: ✓  (error = 1.09e-14, traces = 28,836)
+<pre>SIR with A: ✓  (error = 1.22e-14, traces = 28,836)
 SIR with D: ✗  (error = 4.22e-03, traces = 30,132)
 </pre>
 </div>
